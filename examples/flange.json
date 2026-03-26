@@ -1,0 +1,9 @@
+﻿{
+  "template": "flange_connector_plate",
+  "outer_diameter": 200,
+  "inner_diameter": 90,
+  "hole_count": 6,
+  "hole_diameter": 9,
+  "hole_spacing": 24,
+  "boss_height": 8
+}

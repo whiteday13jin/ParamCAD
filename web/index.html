@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ParamCAD-solidworks零件生成器 v0.82</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --card: #ffffff;
+      --line: #d7e0ec;
+      --text: #1f2937;
+      --sub: #5f6b7a;
+      --primary: #0b63f3;
+      --primary-hover: #0a54cb;
+      --ok-bg: #eafaf0;
+      --ok-text: #0f5132;
+      --err-bg: #fdeaea;
+      --err-text: #842029;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top right, #dbe7ff 0%, var(--bg) 46%);
+      color: var(--text);
+      font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    .wrap {
+      max-width: 1120px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07);
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 26px;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--sub);
+      font-size: 14px;
+    }
+
+    .steps {
+      margin-top: 12px;
+      padding: 12px 14px;
+      background: #f6f9ff;
+      border: 1px dashed #c7d5ea;
+      border-radius: 10px;
+      color: #1f3352;
+      font-size: 14px;
+      line-height: 1.75;
+    }
+
+    .section-title {
+      margin: 4px 0 10px;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .row label {
+      font-size: 15px;
+    }
+
+    input, select, button {
+      font: inherit;
+    }
+
+    input[type="text"], select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      margin: 12px 0;
+    }
+
+    .checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .hint-inline {
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: var(--sub);
+    }
+
+    .param-table {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .param-head, .param-row {
+      display: grid;
+      grid-template-columns: 220px 1fr 220px 240px;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+    }
+
+    .param-head {
+      background: #f4f8ff;
+      font-weight: 600;
+      font-size: 13px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .param-row {
+      border-bottom: 1px solid #edf1f7;
+      font-size: 14px;
+    }
+
+    .param-row:last-child {
+      border-bottom: none;
+    }
+
+    .required {
+      color: #b42318;
+      font-weight: 700;
+    }
+
+    .param-code {
+      color: #334155;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 6px 8px;
+    }
+
+    .btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: var(--primary-hover); }
+
+    .btn-secondary {
+      background: #edf2fb;
+      color: #1f2a37;
+    }
+
+    #status {
+      display: none;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    .ok { background: var(--ok-bg); color: var(--ok-text); }
+    .err { background: var(--err-bg); color: var(--err-text); }
+
+    .result-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px;
+      background: #f8fafc;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .foot {
+      margin-top: 8px;
+      color: var(--sub);
+      font-size: 12px;
+    }
+
+    @media (max-width: 980px) {
+      .row { grid-template-columns: 1fr; gap: 6px; }
+      .param-head, .param-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>ParamCAD-solidworks零件生成器 v0.82</h1>
+      <p class="sub">面向机械设计师，旨在缩减设计时间：填写参数，或自定义其他实体特征，一键生成对应零部件，并将模型存至指定本地目录。</p>
+
+      <div class="steps">
+        操作步骤：<br />
+        1. 在“零件类型选择”下拉中选模型。<br />
+        2. 在“参数输入”中填要修改的值；留空即使用默认值。<br />
+        3. 点击“开始生成”，下方会显示中文结果和生成路径。
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">模型类型</h2>
+
+      <div class="row">
+        <label for="template">零件类型选择</label>
+        <select id="template">
+          <option value="">正在加载模板...</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="outputDir">输出目录（可选）</label>
+        <input id="outputDir" type="text" placeholder="例如 D:\Users\你\Desktop\ParamCAD_Output" />
+      </div>
+
+      <div class="checks">
+        <label><input id="useRealCad" type="checkbox" checked /> 使用真实 SolidWorks 生成</label>
+        <label><input id="generateDrawing" type="checkbox" /> 同时生成工程图占位文件</label>
+      </div>
+
+      <h2 class="section-title">参数输入</h2>
+      <div class="hint-inline">输入框提示值=默认值；留空不填时自动按默认值生成。</div>
+
+      <div class="param-table">
+        <div class="param-head">
+          <div>参数中文名</div>
+          <div>输入值（可留空）</div>
+          <div>参数代号</div>
+          <div>提示/约束</div>
+        </div>
+        <div id="paramRows"></div>
+      </div>
+
+      <div class="btns">
+        <button class="btn-primary" id="btnGenerate">开始生成</button>
+        <button class="btn-secondary" id="btnReset">清空输入（回到默认）</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="status"></div>
+      <div id="result" class="result-box">等待生成...</div>
+      <div class="foot">提示：当前默认关闭宏执行弹窗；参数驱动采用“模板尺寸写回 + rebuild”。</div>
+    </div>
+  </div>
+
+  <script>
+    const templateSelect = document.getElementById('template');
+    const outputDir = document.getElementById('outputDir');
+    const useRealCad = document.getElementById('useRealCad');
+    const generateDrawing = document.getElementById('generateDrawing');
+    const btnGenerate = document.getElementById('btnGenerate');
+    const btnReset = document.getElementById('btnReset');
+    const paramRows = document.getElementById('paramRows');
+    const statusBox = document.getElementById('status');
+    const resultBox = document.getElementById('result');
+
+    let templates = {};
+
+    const templateNameZh = {
+      motor_mount_bracket: '电机/减速机安装支架',
+      flange_connector_plate: '法兰/连接板',
+      sheet_metal_cover: '钣金外壳'
+    };
+
+    const paramLabelZh = {
+      motor_mount_bracket: {
+        length: '支架长度(mm)',
+        width: '支架宽度(mm)',
+        height: '支架高度(mm)',
+        plate_thickness: '板厚(mm)',
+        hole_diameter: '安装孔直径(mm)',
+        hole_count: '孔数量',
+        hole_spacing: '孔中心距(mm)',
+        fillet_radius: '圆角半径(mm)'
+      },
+      flange_connector_plate: {
+        outer_diameter: '外径(mm)',
+        inner_diameter: '内径(mm)',
+        plate_thickness: '厚度(mm)',
+        hole_count: '孔数量',
+        hole_diameter: '孔径(mm)',
+        hole_spacing: '孔中心圆直径(mm)',
+        boss_height: '凸台高度(mm)'
+      },
+      sheet_metal_cover: {
+        length: '外壳长度(mm)',
+        width: '外壳宽度(mm)',
+        height: '外壳高度(mm)',
+        plate_thickness: '板厚(mm)',
+        bend_radius: '折弯半径(mm)',
+        mounting_holes: '安装孔数量',
+        cutout_positions: '开孔位置(文本/JSON)'
+      }
+    };
+
+    function setStatus(text, ok = true) {
+      statusBox.style.display = 'block';
+      statusBox.className = ok ? 'ok' : 'err';
+      statusBox.textContent = text;
+    }
+
+    function clearStatus() {
+      statusBox.style.display = 'none';
+      statusBox.className = '';
+      statusBox.textContent = '';
+    }
+
+    function isNumberLike(v) {
+      return /^-?\d+(\.\d+)?$/.test(v.trim());
+    }
+
+    function toHintText(spec, key) {
+      const defaults = spec.defaults || {};
+      const bounds = spec.bounds || {};
+      const d = key in defaults ? `默认: ${defaults[key]}` : '默认: 无';
+      const b = bounds[key] ? `范围: ${bounds[key].min ?? '-'} ~ ${bounds[key].max ?? '-'}` : '范围: -';
+      return `${d}；${b}`;
+    }
+
+    function getZhLabel(templateName, key) {
+      return (paramLabelZh[templateName] && paramLabelZh[templateName][key]) || key;
+    }
+
+    function renderParams(templateName) {
+      paramRows.innerHTML = '';
+      const spec = templates[templateName];
+      if (!spec) return;
+
+      const keys = Array.from(new Set([
+        ...Object.keys(spec.defaults || {}),
+        ...(spec.required || [])
+      ])).sort();
+
+      keys.forEach((key) => {
+        const row = document.createElement('div');
+        row.className = 'param-row';
+
+        const required = (spec.required || []).includes(key);
+        const zhName = getZhLabel(templateName, key);
+        const nameCell = document.createElement('div');
+        nameCell.innerHTML = required ? `${zhName} <span class="required">*</span>` : zhName;
+
+        const inputCell = document.createElement('div');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.dataset.paramKey = key;
+        input.placeholder = String((spec.defaults || {})[key] ?? '');
+        inputCell.appendChild(input);
+
+        const codeCell = document.createElement('div');
+        codeCell.className = 'param-code';
+        codeCell.textContent = key;
+
+        const hintCell = document.createElement('div');
+        hintCell.textContent = toHintText(spec, key);
+
+        row.appendChild(nameCell);
+        row.appendChild(inputCell);
+        row.appendChild(codeCell);
+        row.appendChild(hintCell);
+        paramRows.appendChild(row);
+      });
+    }
+
+    function clearInputsKeepDefaults() {
+      document.querySelectorAll('[data-param-key]').forEach((input) => {
+        input.value = '';
+      });
+      clearStatus();
+      resultBox.textContent = '已清空输入。留空时会使用默认参数。';
+    }
+
+    function collectPayload() {
+      const payload = {
+        template: templateSelect.value,
+        use_real_cad: useRealCad.checked,
+        generate_drawing: generateDrawing.checked
+      };
+
+      const out = outputDir.value.trim();
+      if (out) payload.output_dir = out;
+
+      document.querySelectorAll('[data-param-key]').forEach((input) => {
+        const key = input.dataset.paramKey;
+        const raw = input.value.trim();
+        if (!raw) return;
+        payload[key] = isNumberLike(raw) ? Number(raw) : raw;
+      });
+
+      return payload;
+    }
+
+    function renderSuccessText(data) {
+      const lines = [];
+      lines.push('生成成功。');
+      lines.push(`模板类型：${data.template}`);
+      lines.push(`零件路径：${data.output_part || '无'}`);
+      lines.push(`工程图路径：${data.output_drawing || '未生成'}`);
+      lines.push(`日志路径：${data.output_log || '无'}`);
+      if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+        lines.push('警告：');
+        data.warnings.forEach((w, i) => lines.push(`  ${i + 1}. ${w}`));
+      }
+      return lines.join('\n');
+    }
+
+    function renderErrorText(data) {
+      const detail = data && data.detail ? data.detail : {};
+      const lines = [];
+      lines.push('生成失败，请检查参数。');
+      const tpl = templateSelect.value;
+
+      function paramText(key) {
+        const zh = getZhLabel(tpl, key);
+        return zh === key ? key : `${zh}（${key}）`;
+      }
+
+      function translateMessage(msg) {
+        const map = {
+          'Validation failed': '参数校验失败',
+          'Template not found': '未找到模板',
+          'CAD execution failed': 'CAD 执行失败'
+        };
+        return map[msg] || msg;
+      }
+
+      function translateDetail(raw) {
+        if (!raw) return '';
+        const text = String(raw);
+        let m = null;
+
+        m = text.match(/^Missing required parameters:\s*(.+)$/);
+        if (m) {
+          const keys = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+          return `缺少必填参数：${keys.map(paramText).join('、')}`;
+        }
+
+        m = text.match(/^Parameter '([^']+)' cannot be empty$/);
+        if (m) return `参数 ${paramText(m[1])} 不能为空`;
+
+        m = text.match(/^Parameter '([^']+)' must be numeric$/);
+        if (m) return `参数 ${paramText(m[1])} 必须是数字`;
+
+        m = text.match(/^Parameter '([^']+)'=([-0-9.]+) is lower than min=([-0-9.]+)$/);
+        if (m) return `参数 ${paramText(m[1])}=${m[2]} 低于最小值 ${m[3]}`;
+
+        m = text.match(/^Parameter '([^']+)'=([-0-9.]+) is higher than max=([-0-9.]+)$/);
+        if (m) return `参数 ${paramText(m[1])}=${m[2]} 高于最大值 ${m[3]}`;
+
+        m = text.match(/^Hole array span\s+([-0-9.]+)\s+exceeds allowed span\s+([-0-9.]+)\s+on\s+'([^']+)'$/);
+        if (m) return `孔阵列总跨度 ${m[1]} 超过 ${paramText(m[3])} 允许跨度 ${m[2]}`;
+
+        if (text === 'inner_diameter must be smaller than outer_diameter') {
+          return `内径（inner_diameter）必须小于外径（outer_diameter）`;
+        }
+        if (text === 'hole_count must be >= 1') {
+          return '孔数量（hole_count）必须大于等于 1';
+        }
+        if (text === 'hole_spacing (bolt circle diameter) must be smaller than outer_diameter') {
+          return '孔中心圆直径（hole_spacing）必须小于外径（outer_diameter）';
+        }
+        if (text === 'bolt circle + hole diameter exceeds outer diameter envelope') {
+          return '孔中心圆直径 + 孔径 超出外径包络，请减小孔径或中心圆直径';
+        }
+        if (text === 'bolt circle and hole diameter are close to inner diameter; check wall thickness near holes.') {
+          return '孔中心圆与孔径接近内径，请检查孔附近壁厚';
+        }
+        if (text === 'bend_radius is smaller than plate_thickness. This may fail for real sheet-metal rules.') {
+          return '折弯半径小于板厚，真实钣金规则下可能失败';
+        }
+        if (text === 'hole_diameter is smaller than plate_thickness, machining/manufacturing may be difficult.') {
+          return '孔径小于板厚，加工制造可能困难';
+        }
+
+        return text;
+      }
+
+      if (detail.message) lines.push(`原因：${translateMessage(detail.message)}`);
+      if (Array.isArray(detail.details) && detail.details.length > 0) {
+        lines.push('细节：');
+        detail.details.forEach((d, i) => lines.push(`  ${i + 1}. ${translateDetail(d)}`));
+      }
+      return lines.join('\n');
+    }
+
+    async function loadTemplates() {
+      const res = await fetch('/templates');
+      if (!res.ok) {
+        throw new Error('模板列表加载失败');
+      }
+      const data = await res.json();
+      templates = data.templates || {};
+
+      templateSelect.innerHTML = '';
+      const firstOption = document.createElement('option');
+      firstOption.value = '';
+      firstOption.textContent = '请选择零件类型';
+      templateSelect.appendChild(firstOption);
+
+      Object.entries(templates).forEach(([name, spec]) => {
+        const op = document.createElement('option');
+        const zh = templateNameZh[name] || spec.display_name || name;
+        op.value = name;
+        op.textContent = `${zh} (${name})`;
+        templateSelect.appendChild(op);
+      });
+    }
+
+    async function generate() {
+      clearStatus();
+      if (!templateSelect.value) {
+        setStatus('请先选择零件类型。', false);
+        return;
+      }
+
+      resultBox.textContent = '生成中，请稍候...';
+      const payload = collectPayload();
+
+      try {
+        const res = await fetch('/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setStatus('生成失败。', false);
+          resultBox.textContent = renderErrorText(data);
+          return;
+        }
+
+        setStatus('生成成功。', true);
+        resultBox.textContent = renderSuccessText(data);
+      } catch (err) {
+        setStatus('请求失败，请确认服务已启动。', false);
+        resultBox.textContent = `请求失败：${String(err)}`;
+      }
+    }
+
+    templateSelect.addEventListener('change', () => {
+      renderParams(templateSelect.value);
+      clearStatus();
+      resultBox.textContent = '请填写参数后点击“开始生成”。';
+    });
+
+    btnGenerate.addEventListener('click', generate);
+    btnReset.addEventListener('click', clearInputsKeepDefaults);
+
+    loadTemplates()
+      .then(() => {
+        setStatus('模板加载成功，请先选择零件类型。', true);
+        resultBox.textContent = '请选择零件类型，然后填写参数。';
+      })
+      .catch((err) => {
+        setStatus(`页面初始化失败：${String(err)}`, false);
+      });
+  </script>
+</body>
+</html>

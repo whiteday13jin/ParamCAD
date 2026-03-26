@@ -1,0 +1,6 @@
+﻿fastapi>=0.116,<1.0
+jinja2>=3.1,<4.0
+openpyxl>=3.1,<4.0
+pydantic>=2.11,<3.0
+uvicorn>=0.35,<1.0
+pywin32>=311; platform_system == "Windows"

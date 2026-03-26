@@ -1,0 +1,98 @@
+﻿{
+  "motor_mount_bracket": {
+    "display_name": "Motor/Gearbox Mount Bracket",
+    "macro_template": "motor_mount_bracket.vba",
+    "model_template": "motor_mount_bracket.SLDPRT",
+    "required": [
+      "length",
+      "width",
+      "height",
+      "plate_thickness",
+      "hole_diameter",
+      "hole_count",
+      "hole_spacing"
+    ],
+    "defaults": {
+      "length": 120,
+      "width": 60,
+      "height": 70,
+      "plate_thickness": 6,
+      "hole_diameter": 6,
+      "hole_count": 4,
+      "hole_spacing": 30,
+      "fillet_radius": 3
+    },
+    "bounds": {
+      "length": { "min": 40, "max": 2000 },
+      "width": { "min": 20, "max": 1000 },
+      "height": { "min": 20, "max": 800 },
+      "plate_thickness": { "min": 1, "max": 50 },
+      "hole_diameter": { "min": 1, "max": 80 },
+      "hole_count": { "min": 1, "max": 100 },
+      "hole_spacing": { "min": 1, "max": 300 },
+      "fillet_radius": { "min": 0, "max": 100 }
+    },
+    "summary_keys": ["length", "width", "height", "hole_diameter", "hole_count"]
+  },
+  "flange_connector_plate": {
+    "display_name": "Flange / Connector Plate",
+    "macro_template": "flange_connector_plate.vba",
+    "model_template": "flange_connector_plate.SLDPRT",
+    "required": [
+      "outer_diameter",
+      "inner_diameter",
+      "hole_count",
+      "hole_diameter",
+      "hole_spacing"
+    ],
+    "defaults": {
+      "outer_diameter": 185,
+      "inner_diameter": 118,
+      "plate_thickness": 20,
+      "hole_count": 4,
+      "hole_diameter": 4,
+      "hole_spacing": 145,
+      "boss_height": 10
+    },
+    "bounds": {
+      "outer_diameter": { "min": 20, "max": 2000 },
+      "inner_diameter": { "min": 1, "max": 1800 },
+      "plate_thickness": { "min": 1, "max": 300 },
+      "hole_count": { "min": 1, "max": 200 },
+      "hole_diameter": { "min": 1, "max": 200 },
+      "hole_spacing": { "min": 1, "max": 400 },
+      "boss_height": { "min": 0, "max": 300 }
+    },
+    "summary_keys": ["outer_diameter", "inner_diameter", "hole_diameter", "hole_count"]
+  },
+  "sheet_metal_cover": {
+    "display_name": "Sheet Metal Cover",
+    "macro_template": "sheet_metal_cover.vba",
+    "model_template": "sheet_metal_cover.SLDPRT",
+    "required": [
+      "length",
+      "width",
+      "height",
+      "plate_thickness",
+      "bend_radius"
+    ],
+    "defaults": {
+      "length": 304.8,
+      "width": 152.4,
+      "height": 44.45,
+      "plate_thickness": 2,
+      "bend_radius": 3,
+      "mounting_holes": 4,
+      "cutout_positions": "[]"
+    },
+    "bounds": {
+      "length": { "min": 20, "max": 3000 },
+      "width": { "min": 20, "max": 3000 },
+      "height": { "min": 10, "max": 1500 },
+      "plate_thickness": { "min": 0.5, "max": 30 },
+      "bend_radius": { "min": 0.1, "max": 200 },
+      "mounting_holes": { "min": 0, "max": 300 }
+    },
+    "summary_keys": ["length", "width", "height", "plate_thickness", "bend_radius"]
+  }
+}

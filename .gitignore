@@ -1,0 +1,33 @@
+﻿# Python cache / virtual env
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Runtime output (generated parts/macros/logs)
+output/**
+!output/.gitkeep
+
+# Excel temp lock files
+~$*.xlsx
+
+# Local env files
+.env
+.env.*
+
+# Build artifacts
+*.log

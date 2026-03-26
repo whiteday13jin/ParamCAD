@@ -1,0 +1,162 @@
+{
+  "motor_mount_bracket": [
+    {
+      "param": "length",
+      "unit": "mm",
+      "targets": [
+        "D1@Sketch1@motor_mount_bracket.Part"
+      ],
+      "aliases": [
+        "base_length_mm"
+      ]
+    },
+    {
+      "param": "width",
+      "unit": "mm",
+      "targets": [
+        "D2@Sketch1@motor_mount_bracket.Part"
+      ],
+      "aliases": [
+        "base_width_mm"
+      ]
+    },
+    {
+      "param": "height",
+      "unit": "mm",
+      "targets": [
+        "D1@BasePlateExtrude@motor_mount_bracket.Part"
+      ],
+      "aliases": [
+        "base_height_mm"
+      ]
+    },
+    {
+      "param": "plate_thickness",
+      "unit": "mm",
+      "targets": [
+        "D1@FeatureOp2@motor_mount_bracket.Part"
+      ]
+    },
+    {
+      "param": "hole_diameter",
+      "unit": "mm",
+      "targets": [
+        "D4@Sketch1@motor_mount_bracket.Part",
+        "D5@Sketch1@motor_mount_bracket.Part",
+        "D6@Sketch1@motor_mount_bracket.Part",
+        "D7@Sketch1@motor_mount_bracket.Part",
+        "D8@Sketch1@motor_mount_bracket.Part"
+      ],
+      "aliases": [
+        "mount_hole_d_mm"
+      ]
+    },
+    {
+      "param": "hole_spacing",
+      "unit": "mm",
+      "targets": [
+        "D1@Sketch2@motor_mount_bracket.Part",
+        "D2@Sketch2@motor_mount_bracket.Part"
+      ]
+    }
+  ],
+  "flange_connector_plate": [
+    {
+      "param": "outer_diameter",
+      "unit": "mm",
+      "targets": [
+        "D@BaseSketch@flange_connector_plate.Part"
+      ]
+    },
+    {
+      "param": "inner_diameter",
+      "unit": "mm",
+      "targets": [
+        "DD@BaseSketch@flange_connector_plate.Part"
+      ]
+    },
+    {
+      "param": "plate_thickness",
+      "unit": "mm",
+      "targets": [
+        "C@BaseSketch@flange_connector_plate.Part"
+      ]
+    },
+    {
+      "param": "boss_height",
+      "unit": "mm",
+      "targets": [
+        "H1@BaseSketch@flange_connector_plate.Part"
+      ]
+    },
+    {
+      "param": "hole_count",
+      "unit": "count",
+      "targets": [
+        "D1@BoltCirclePattern@flange_connector_plate.Part"
+      ],
+      "aliases": [
+        "bolt_count"
+      ]
+    },
+    {
+      "param": "hole_diameter",
+      "unit": "mm",
+      "targets": [
+        "n@CutSketch@flange_connector_plate.Part"
+      ]
+    },
+    {
+      "param": "hole_spacing",
+      "unit": "mm",
+      "targets": [
+        "K@CutSketch@flange_connector_plate.Part"
+      ],
+      "aliases": [
+        "bolt_circle_diameter"
+      ]
+    }
+  ],
+  "sheet_metal_cover": [
+    {
+      "param": "length",
+      "unit": "mm",
+      "targets": [
+        "D1@Sketch1@sheet_metal_cover.Part"
+      ],
+      "aliases": [
+        "cover_length_mm"
+      ]
+    },
+    {
+      "param": "width",
+      "unit": "mm",
+      "targets": [
+        "D2@Sketch1@sheet_metal_cover.Part"
+      ],
+      "aliases": [
+        "cover_width_mm"
+      ]
+    },
+    {
+      "param": "height",
+      "unit": "mm",
+      "targets": [
+        "D3@Sketch1@sheet_metal_cover.Part"
+      ],
+      "aliases": [
+        "cover_height_mm"
+      ]
+    },
+    {
+      "param": "plate_thickness",
+      "unit": "mm",
+      "targets": [
+        "D1@CoverShell@sheet_metal_cover.Part"
+      ],
+      "aliases": [
+        "wall_thickness_mm"
+      ]
+    }
+  ]
+}

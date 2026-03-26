@@ -1,0 +1,11 @@
+﻿{
+  "template": "motor_mount_bracket",
+  "length": 100,
+  "width": 72,
+  "height": 50,
+  "plate_thickness": 6,
+  "hole_diameter": 6,
+  "hole_count": 4,
+  "hole_spacing": 60,
+  "fillet_radius": 3
+}
