@@ -4,6 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from app.core.capabilities import TemplateCapabilityInspector
+from app.core.message_localizer import localize_messages, template_text
 from app.core.models import ParsedInput, PipelineError, PipelineOptions, PipelineResult
 from app.core.template_manager import TemplateManager
 from app.core.validation import Validator
@@ -18,6 +20,9 @@ class GenerationPipeline:
         self.options = options
         registry_path = options.static_root / "template_registry.json"
         self.template_manager = TemplateManager(registry_path)
+        self.capability_inspector = TemplateCapabilityInspector(
+            binding_path=options.static_root / "template_bindings.json",
+        )
         self.validator = Validator()
         self.output_manager = OutputManager(options.output_root)
         self.macro_generator = MacroGenerator(
@@ -40,9 +45,20 @@ class GenerationPipeline:
         except KeyError as exc:
             raise PipelineError(str(exc)) from exc
 
-        validation = self.validator.validate(template, parsed_input.parameters)
+        capability_report = self.capability_inspector.describe(template)
+        validation = self.validator.validate(
+            template,
+            parsed_input.parameters,
+            executable_parameters=set(capability_report["effective_parameters"]),
+        )
         if validation.errors:
-            raise PipelineError("Validation failed", validation.errors)
+            raise PipelineError("Validation failed", localize_messages(validation.errors, template.name))
+
+        warnings = localize_messages(validation.warnings, template.name)
+        if template.support_level != "stable":
+            warnings.append(
+                f"{template_text(template.name)} 当前处于部分支持阶段，建议先 dry-run 或人工复核后再依赖真实 CAD 输出。"
+            )
 
         try:
             macro = self.macro_generator.generate(template, validation.normalized_parameters)
@@ -76,13 +92,18 @@ class GenerationPipeline:
             "raw_input": parsed_input.raw_input,
             "final_parameters": validation.normalized_parameters,
             "defaults_applied": validation.defaults_applied,
-            "warnings": validation.warnings,
+            "warnings": warnings,
+            "capability_report": capability_report,
+            "template_support_level": template.support_level,
+            "template_llm_ready": template.llm_ready,
+            "template_status_notes": template.status_notes,
             "macro_template": str(macro.macro_source_path),
             "macro_generated": str(macro.macro_path),
             "part_output": str(output_paths.part_path),
             "drawing_output": str(drawing_path) if drawing_path else None,
             "version": output_paths.version,
             "cad_message": execution.message,
+            "cad_details": execution.details,
         }
         self.output_manager.write_log(output_paths.log_path, log_payload)
 
@@ -95,6 +116,8 @@ class GenerationPipeline:
             output_log=output_paths.log_path,
             macro_path=macro.macro_path,
             version=output_paths.version,
-            warnings=validation.warnings,
+            warnings=warnings,
+            cad_message=execution.message,
+            cad_details=execution.details,
             generated_at=datetime.utcnow(),
         )

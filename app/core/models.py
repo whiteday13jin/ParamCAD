@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class TemplateDefinition(BaseModel):
@@ -13,6 +13,9 @@ class TemplateDefinition(BaseModel):
     macro_template: str
     model_template: str
     drawing_template: str | None = None
+    support_level: str = "partial"
+    llm_ready: bool = False
+    status_notes: list[str] = Field(default_factory=list)
     required: list[str] = Field(default_factory=list)
     defaults: dict[str, Any] = Field(default_factory=dict)
     bounds: dict[str, dict[str, float]] = Field(default_factory=dict)
@@ -52,6 +55,7 @@ class ExecutionResult(BaseModel):
     message: str
     part_path: Path | None = None
     drawing_path: Path | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class PipelineResult(BaseModel):
@@ -64,6 +68,8 @@ class PipelineResult(BaseModel):
     macro_path: Path
     version: int
     warnings: list[str] = Field(default_factory=list)
+    cad_message: str = ""
+    cad_details: dict[str, Any] = Field(default_factory=dict)
     generated_at: datetime
 
 
@@ -79,3 +85,39 @@ class PipelineError(Exception):
     def __init__(self, message: str, details: list[str] | None = None):
         super().__init__(message)
         self.details = details or []
+
+
+class LLMPlanRequest(BaseModel):
+    text: str
+
+
+class LLMProposedOp(BaseModel):
+    op: str
+    label: str = ""
+    status: str = "proposal_only"
+    reason: str = ""
+    arguments: dict[str, Any] = Field(default_factory=dict)
+
+
+class LLMPlanResponse(BaseModel):
+    status: str
+    template: str | None = None
+    parameter_patch: dict[str, Any] = Field(default_factory=dict)
+    explicit_parameters: dict[str, Any] = Field(default_factory=dict)
+    inferred_parameters: dict[str, Any] = Field(default_factory=dict)
+    suggested_defaults: dict[str, Any] = Field(default_factory=dict)
+    proposed_ops: list[LLMProposedOp] = Field(default_factory=list)
+    missing_or_uncertain: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    validation_errors: list[str] = Field(default_factory=list)
+    summary: str = ""
+
+    @field_validator("parameter_patch", mode="before")
+    @classmethod
+    def ensure_patch_dict(cls, value: Any) -> dict[str, Any]:
+        return value if isinstance(value, dict) else {}
+
+    @field_validator("proposed_ops", mode="before")
+    @classmethod
+    def ensure_proposed_ops_list(cls, value: Any) -> list[dict[str, Any]] | list[LLMProposedOp]:
+        return value if isinstance(value, list) else []

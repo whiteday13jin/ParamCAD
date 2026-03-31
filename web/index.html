@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ParamCAD-solidworks零件生成器 v0.82</title>
+  <title>ParamCAD · AI参数提案式建模</title>
   <style>
     :root {
       --bg: #f3f6fb;
@@ -87,13 +87,28 @@
       font: inherit;
     }
 
-    input[type="text"], select {
+    input[type="text"], select, textarea {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 10px;
       background: #fff;
       color: var(--text);
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .inline-input {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .inline-input input {
+      flex: 1;
     }
 
     .checks {
@@ -114,6 +129,65 @@
       margin-bottom: 12px;
       font-size: 13px;
       color: var(--sub);
+    }
+
+    .hint-inline-warning {
+      color: #b45309;
+      font-weight: 600;
+    }
+
+    .template-profile {
+      display: none;
+      margin-bottom: 12px;
+      padding: 12px 14px;
+      border: 1px solid #d6e4ff;
+      border-radius: 10px;
+      background: #f7faff;
+    }
+
+    .template-profile-title {
+      margin-bottom: 8px;
+      font-weight: 700;
+      color: #1e3a8a;
+    }
+
+    .template-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-stable {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .badge-partial {
+      background: #ffedd5;
+      color: #9a3412;
+    }
+
+    .badge-llm {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .template-profile-notes {
+      margin: 0;
+      padding-left: 18px;
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.6;
     }
 
     .param-table {
@@ -144,6 +218,22 @@
 
     .param-row:last-child {
       border-bottom: none;
+    }
+
+    .param-row-inactive {
+      background: #fff7ed;
+    }
+
+    .template-notes {
+      display: none;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      background: #fff7ed;
+      color: #9a3412;
+      font-size: 13px;
+      line-height: 1.6;
     }
 
     .required {
@@ -187,6 +277,17 @@
       color: #1f2a37;
     }
 
+    .btn-warning {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    button:disabled {
+      background: #6b7280;
+      color: #ffffff;
+      cursor: not-allowed;
+    }
+
     #status {
       display: none;
       border-radius: 8px;
@@ -209,6 +310,16 @@
       word-break: break-all;
     }
 
+    .result-box a {
+      color: var(--primary);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .result-box-muted {
+      color: var(--sub);
+    }
+
     .foot {
       margin-top: 8px;
       color: var(--sub);
@@ -224,14 +335,15 @@
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>ParamCAD-solidworks零件生成器 v0.82</h1>
-      <p class="sub">面向机械设计师，旨在缩减设计时间：填写参数，或自定义其他实体特征，一键生成对应零部件，并将模型存至指定本地目录。</p>
+      <h1>ParamCAD · AI参数提案式建模</h1>
+      <p class="sub">先用自然语言生成参数提案，再由规则与模板系统完成校验、确认和 SolidWorks 稳定生成。当前版本 v0.9。</p>
 
       <div class="steps">
         操作步骤：<br />
-        1. 在“零件类型选择”下拉中选模型。<br />
-        2. 在“参数输入”中填要修改的值；留空即使用默认值。<br />
-        3. 点击“开始生成”，下方会显示中文结果和生成路径。
+        1. 在“零件类型选择”下拉中选模型，或者先在下方输入自然语言描述。<br />
+        2. 在参数框中输入数值，或直接在 LLM 框中描述特征。<br />
+        3. 若是 LLM 生成，则点“解析建议”后确认默认填充值、其他待确认项后，点击“采纳生成”或继续调整输入。<br />
+        4. 点击“开始生成”，下方显示中文结果和生成路径。
       </div>
     </div>
 
@@ -245,9 +357,14 @@
         </select>
       </div>
 
+      <div id="templateProfile" class="template-profile"></div>
+
       <div class="row">
         <label for="outputDir">输出目录（可选）</label>
-        <input id="outputDir" type="text" placeholder="例如 D:\Users\你\Desktop\ParamCAD_Output" />
+        <div class="inline-input">
+          <input id="outputDir" type="text" placeholder="例如 D:\Users\你\Desktop\ParamCAD_Output" />
+          <button class="btn-secondary" id="btnPickOutputDir" type="button">选择目录</button>
+        </div>
       </div>
 
       <div class="checks">
@@ -257,6 +374,7 @@
 
       <h2 class="section-title">参数输入</h2>
       <div class="hint-inline">输入框提示值=默认值；留空不填时自动按默认值生成。</div>
+      <div id="templateNotes" class="template-notes"></div>
 
       <div class="param-table">
         <div class="param-head">
@@ -275,9 +393,26 @@
     </div>
 
     <div class="card">
+      <h2 class="section-title">LLM 参数提案</h2>
+      <div id="planHint" class="hint-inline">先点“解析建议”，再选择采纳当前提案生成，或者回到上方参数框手动调整后生成。</div>
+
+      <div class="row">
+        <label for="nlInput">中文描述</label>
+        <textarea id="nlInput" placeholder="例如：做一个法兰，外径220，内径120，8个孔，孔径10，孔中心圆131，凸台高8，板厚18；或者：做一个钣金外壳，长300，宽150，高60，板厚2；或者：做一个电机安装支架，长240，宽60，高70，板厚6，孔径20，孔距30"></textarea>
+      </div>
+
+      <div class="btns">
+        <button class="btn-secondary" id="btnPlan">解析建议</button>
+        <button class="btn-primary" id="btnPlanGenerate" disabled>采纳生成</button>
+      </div>
+
+      <div id="planResult" class="result-box result-box-muted">等待解析建议...</div>
+    </div>
+
+    <div class="card">
       <div id="status"></div>
       <div id="result" class="result-box">等待生成...</div>
-      <div class="foot">提示：当前默认关闭宏执行弹窗；参数驱动采用“模板尺寸写回 + rebuild”。</div>
+      <div class="foot">提示：当前默认关闭宏执行弹窗；参数驱动采用“模板尺寸写回 + 重建”。</div>
     </div>
   </div>
 
@@ -286,13 +421,22 @@
     const outputDir = document.getElementById('outputDir');
     const useRealCad = document.getElementById('useRealCad');
     const generateDrawing = document.getElementById('generateDrawing');
+    const nlInput = document.getElementById('nlInput');
+    const btnPlan = document.getElementById('btnPlan');
+    const btnPlanGenerate = document.getElementById('btnPlanGenerate');
+    const planHint = document.getElementById('planHint');
+    const btnPickOutputDir = document.getElementById('btnPickOutputDir');
+    const planResult = document.getElementById('planResult');
     const btnGenerate = document.getElementById('btnGenerate');
     const btnReset = document.getElementById('btnReset');
+    const templateProfile = document.getElementById('templateProfile');
     const paramRows = document.getElementById('paramRows');
+    const templateNotes = document.getElementById('templateNotes');
     const statusBox = document.getElementById('status');
     const resultBox = document.getElementById('result');
 
     let templates = {};
+    let currentPlan = null;
 
     const templateNameZh = {
       motor_mount_bracket: '电机/减速机安装支架',
@@ -343,6 +487,32 @@
       statusBox.textContent = '';
     }
 
+    function clearPlanState(message = '等待解析建议...') {
+      currentPlan = null;
+      btnPlanGenerate.disabled = true;
+      planResult.textContent = message;
+      planResult.classList.add('result-box-muted');
+      btnPlan.classList.remove('btn-warning');
+      btnPlan.classList.add('btn-secondary');
+      planHint.classList.remove('hint-inline-warning');
+    }
+
+    function updatePlanGenerateState() {
+      const hasValidationErrors = Array.isArray(currentPlan?.validation_errors) && currentPlan.validation_errors.length > 0;
+      const hasPatch = currentPlan?.parameter_patch && Object.keys(currentPlan.parameter_patch).length > 0;
+      const canAdopt = currentPlan
+        && currentPlan.status !== 'unsupported'
+        && currentPlan.template
+        && hasPatch
+        && !hasValidationErrors;
+      const needsConfirmation = currentPlan?.status === 'needs_confirmation';
+
+      btnPlanGenerate.disabled = !canAdopt;
+      btnPlan.classList.toggle('btn-warning', needsConfirmation);
+      btnPlan.classList.toggle('btn-secondary', !needsConfirmation);
+      planHint.classList.toggle('hint-inline-warning', needsConfirmation);
+    }
+
     function isNumberLike(v) {
       return /^-?\d+(\.\d+)?$/.test(v.trim());
     }
@@ -359,19 +529,215 @@
       return (paramLabelZh[templateName] && paramLabelZh[templateName][key]) || key;
     }
 
+    function paramTextFor(templateName, key) {
+      const zh = getZhLabel(templateName, key);
+      return zh === key ? key : `${zh}（${key}）`;
+    }
+
+    function translatePlanStatus(status) {
+      const map = {
+        ready: '可直接生成',
+        needs_confirmation: '需要确认',
+        unsupported: '当前不支持'
+      };
+      return map[status] || status || '未知';
+    }
+
+    function translateUserMessage(raw, templateName) {
+      if (!raw) return '';
+      const text = String(raw);
+      let m = null;
+
+      if (text === 'Validation failed') return '参数校验失败';
+      if (text === 'Template not found') return '未找到模板';
+      if (text === 'CAD execution failed') return 'CAD 执行失败';
+      if (text === 'LLM 提案服务当前不可用') return 'LLM 提案服务当前不可用';
+      if (text === 'LLM 提案结果解析失败') return 'LLM 提案结果解析失败';
+      if (text === '部分已声明参数尚未稳定接入当前 SolidWorks 尺寸绑定。') {
+        return '部分已声明参数尚未稳定接入当前 SolidWorks 尺寸绑定。';
+      }
+      if (text === '部分必填参数当前仍会参与校验，但修改它们未必会真实影响模型。') {
+        return '部分必填参数当前仍会参与校验，但修改它们未必会真实影响模型。';
+      }
+      if (text === '缺少 LLM API Key，请先配置 PARAMCAD_LLM_API_KEY 或 DASHSCOPE_API_KEY。') {
+        return '缺少 LLM API Key，请先配置 PARAMCAD_LLM_API_KEY 或 DASHSCOPE_API_KEY。';
+      }
+
+      m = text.match(/^LLM 接口返回 HTTP (\d+) 错误[:：](.+)$/);
+      if (m) return `LLM 接口调用失败（HTTP ${m[1]}）。请检查 API Key、模型配置或服务端返回信息。`;
+
+      m = text.match(/^LLM HTTP error (\d+)[:：](.+)$/);
+      if (m) return `LLM 接口调用失败（HTTP ${m[1]}）。请检查 API Key、模型配置或服务端返回信息。`;
+
+      m = text.match(/^LLM 网络请求失败[:：](.+)$/);
+      if (m) return 'LLM 网络请求失败，请检查网络连接或服务地址配置。';
+
+      m = text.match(/^LLM request failed[:：](.+)$/);
+      if (m) return 'LLM 网络请求失败，请检查网络连接或服务地址配置。';
+
+      m = text.match(/^LLM 返回的数据结构不符合预期[:：](.+)$/);
+      if (m) return 'LLM 返回的数据结构不符合预期，请稍后重试或检查模型输出约束。';
+
+      m = text.match(/^Unexpected LLM response shape[:：](.+)$/);
+      if (m) return 'LLM 返回的数据结构不符合预期，请稍后重试或检查模型输出约束。';
+
+      if (text === 'LLM 返回内容中未包含可解析的 JSON 对象') {
+        return 'LLM 返回内容中未包含可解析的 JSON 对象。';
+      }
+      if (text === 'LLM response did not contain a JSON object') {
+        return 'LLM 返回内容中未包含可解析的 JSON 对象。';
+      }
+      if (text === 'LLM 返回了不完整的 JSON 对象') {
+        return 'LLM 返回了不完整的 JSON 对象。';
+      }
+      if (text === 'LLM response contained an incomplete JSON object') {
+        return 'LLM 返回了不完整的 JSON 对象。';
+      }
+
+      m = text.match(/^Missing required parameters:\s*(.+)$/);
+      if (m) {
+        const keys = m[1].split(',').map((s) => s.trim()).filter(Boolean);
+        return `缺少必填参数：${keys.map((key) => paramTextFor(templateName, key)).join('、')}`;
+      }
+
+      m = text.match(/^Parameter '([^']+)' cannot be empty$/);
+      if (m) return `参数 ${paramTextFor(templateName, m[1])} 不能为空`;
+
+      m = text.match(/^Parameter '([^']+)' must be numeric$/);
+      if (m) return `参数 ${paramTextFor(templateName, m[1])} 必须是数字`;
+
+      m = text.match(/^Parameter '([^']+)' must be an integer$/);
+      if (m) return `参数 ${paramTextFor(templateName, m[1])} 必须是整数`;
+
+      m = text.match(/^Parameter '([^']+)'=([-0-9.]+) is lower than min=([-0-9.]+)$/);
+      if (m) return `参数 ${paramTextFor(templateName, m[1])}=${m[2]} 低于最小值 ${m[3]}`;
+
+      m = text.match(/^Parameter '([^']+)'=([-0-9.]+) is higher than max=([-0-9.]+)$/);
+      if (m) return `参数 ${paramTextFor(templateName, m[1])}=${m[2]} 高于最大值 ${m[3]}`;
+
+      m = text.match(/^Unknown parameters for template '([^']+)':\s*(.+)$/);
+      if (m) return `存在当前模板不支持的参数：${m[2]}`;
+
+      m = text.match(/^Parameter '([^']+)' is accepted by the template schema, but it is not connected to the active SolidWorks executor yet\.$/);
+      if (m) return `参数 ${paramTextFor(templateName, m[1])} 当前只是模板字段，尚未稳定接入执行器`;
+
+      m = text.match(/^Template '([^']+)' is currently marked as support_level=([^.]*)\. Prefer dry-run or manual review before relying on real CAD output\.$/);
+      if (m) return `模板 ${m[1]} 当前处于部分支持阶段，建议先 dry-run 或人工复核后再依赖真实 CAD 输出`;
+
+      m = text.match(/^Hole array span\s+([-0-9.]+)\s+exceeds allowed span\s+([-0-9.]+)\s+on\s+'([^']+)'\s+\(hole_count=([-0-9.]+), hole_spacing=([-0-9.]+), hole_diameter=([-0-9.]+), required_([^>=]+)>=([-0-9.]+)\)$/);
+      if (m) return `孔阵列总跨度 ${m[1]} 超过 ${paramTextFor(templateName, m[3])} 允许跨度 ${m[2]}，当前组合为 孔数=${m[4]}、孔距=${m[5]}、孔径=${m[6]}，建议至少满足 ${m[7]} >= ${m[8]}`;
+
+      if (text === 'inner_diameter must be smaller than outer_diameter') {
+        return '内径（inner_diameter）必须小于外径（outer_diameter）';
+      }
+      if (text === 'hole_count must be >= 1') {
+        return '孔数量（hole_count）必须大于等于 1';
+      }
+      if (text === 'hole_spacing (bolt circle diameter) must be smaller than outer_diameter') {
+        return '孔中心圆直径（hole_spacing）必须小于外径（outer_diameter）';
+      }
+      if (text === 'bolt circle + hole diameter exceeds outer diameter envelope') {
+        return '孔中心圆直径 + 孔径 超出外径包络，请减小孔径或中心圆直径';
+      }
+      if (text === 'bolt circle diameter is too small for the inner diameter and hole diameter combination') {
+        return '孔中心圆直径过小，孔会落入内孔范围，请增大中心圆直径或调整内径/孔径';
+      }
+      if (text === 'bolt circle and hole diameter are close to inner diameter; check wall thickness near holes.') {
+        return '孔中心圆与孔径接近内径，请检查孔附近壁厚';
+      }
+      if (text === 'bend_radius is smaller than plate_thickness. This may fail for real sheet-metal rules.') {
+        return '折弯半径小于板厚，真实钣金规则下可能失败';
+      }
+      if (text === 'hole_diameter is smaller than plate_thickness, machining/manufacturing may be difficult.') {
+        return '孔径小于板厚，加工制造可能困难';
+      }
+
+      return text;
+    }
+
+    function translateCadMessage(raw) {
+      if (!raw) return '';
+      let text = String(raw);
+      text = text.replace('Dry-run execution completed.', 'Dry-run 执行完成。');
+      text = text.replace('Template bodies detected.', '检测到模板实体。');
+      text = text.replace('Macro execution skipped (default safe mode).', '宏执行已跳过（默认安全模式）。');
+      text = text.replace('No parameter bindings configured for this template.', '当前模板未配置参数绑定。');
+
+      text = text.replace(/Bindings applied:\s*(\d+)\s*dimension writes\./, '已写入 $1 个尺寸。');
+      text = text.replace(/Missing dimensions:\s*(\d+)\./, '缺失 $1 个目标尺寸。');
+      text = text.replace(/Skipped invalid values:\s*([^.]*)\./, '已跳过无效值：$1。');
+      return text;
+    }
+
+    function renderTemplateProfile(templateName, spec) {
+      if (!spec) {
+        templateProfile.style.display = 'none';
+        templateProfile.innerHTML = '';
+        return;
+      }
+
+      const level = spec.support_level || 'partial';
+      const levelLabel = level === 'stable' ? '当前优先模板' : '部分支持模板';
+      const badges = [
+        `<span class="badge ${level === 'stable' ? 'badge-stable' : 'badge-partial'}">${levelLabel}</span>`
+      ];
+      if (spec.llm_ready) {
+        badges.push('<span class="badge badge-llm">LLM MVP 推荐</span>');
+      }
+
+      const notes = Array.isArray(spec.status_notes) ? [...spec.status_notes] : [];
+      const hidden = Array.isArray(spec.hidden_parameters) ? spec.hidden_parameters : [];
+      if (hidden.length > 0) {
+        notes.push(`当前界面已隐藏 ${hidden.length} 个未稳定接入执行器的参数。`);
+      }
+      const notesHtml = notes.length > 0
+        ? `<ul class="template-profile-notes">${notes.map((note) => `<li>${note}</li>`).join('')}</ul>`
+        : '';
+
+      const title = templateNameZh[templateName] || spec.display_name || templateName;
+      templateProfile.innerHTML = `
+        <div class="template-profile-title">${title}</div>
+        <div class="template-badges">${badges.join('')}</div>
+        ${notesHtml}
+      `;
+      templateProfile.style.display = 'block';
+    }
+
     function renderParams(templateName) {
       paramRows.innerHTML = '';
       const spec = templates[templateName];
-      if (!spec) return;
+      if (!spec) {
+        renderTemplateProfile(templateName, null);
+        templateNotes.style.display = 'none';
+        templateNotes.textContent = '';
+        return;
+      }
 
-      const keys = Array.from(new Set([
-        ...Object.keys(spec.defaults || {}),
-        ...(spec.required || [])
-      ])).sort();
+      renderTemplateProfile(templateName, spec);
+
+      const inactiveKeys = new Set(spec.inactive_parameters || []);
+      const notes = Array.isArray(spec.notes) ? spec.notes : [];
+      if (notes.length > 0) {
+        templateNotes.style.display = 'block';
+        templateNotes.textContent = notes.join(' ');
+      } else {
+        templateNotes.style.display = 'none';
+        templateNotes.textContent = '';
+      }
+
+      const keys = Array.isArray(spec.visible_parameters) && spec.visible_parameters.length > 0
+        ? Array.from(new Set(spec.visible_parameters))
+        : Array.from(new Set([
+            ...Object.keys(spec.defaults || {}),
+            ...(spec.required || [])
+          ])).sort();
 
       keys.forEach((key) => {
         const row = document.createElement('div');
         row.className = 'param-row';
+        if (inactiveKeys.has(key)) {
+          row.classList.add('param-row-inactive');
+        }
 
         const required = (spec.required || []).includes(key);
         const zhName = getZhLabel(templateName, key);
@@ -390,7 +756,11 @@
         codeCell.textContent = key;
 
         const hintCell = document.createElement('div');
-        hintCell.textContent = toHintText(spec, key);
+        let hintText = toHintText(spec, key);
+        if (inactiveKeys.has(key)) {
+          hintText += ' | 当前未稳定接入执行器';
+        }
+        hintCell.textContent = hintText;
 
         row.appendChild(nameCell);
         row.appendChild(inputCell);
@@ -404,6 +774,7 @@
       document.querySelectorAll('[data-param-key]').forEach((input) => {
         input.value = '';
       });
+      clearPlanState('已清空提案与输入。留空时会使用默认参数。');
       clearStatus();
       resultBox.textContent = '已清空输入。留空时会使用默认参数。';
     }
@@ -428,17 +799,96 @@
       return payload;
     }
 
-    function renderSuccessText(data) {
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function renderPathRow(label, pathValue, fallbackText) {
+      if (!pathValue) {
+        return `<li>${escapeHtml(label)}：${escapeHtml(fallbackText)}</li>`;
+      }
+      const safePath = escapeHtml(pathValue);
+      return `<li>${escapeHtml(label)}：<a href="#" data-open-path="${safePath}">${safePath}</a></li>`;
+    }
+
+    function renderSuccessHtml(data) {
+      const items = [];
+      items.push(`<li>模板类型：${escapeHtml(data.template || '未确定')}</li>`);
+      items.push(renderPathRow('零件路径', data.output_part, '无'));
+      items.push(renderPathRow('工程图路径', data.output_drawing, '未生成'));
+      items.push(renderPathRow('日志路径', data.output_log, '无'));
+      if (data.cad_message) {
+        items.push(`<li>CAD 信息：${escapeHtml(translateCadMessage(data.cad_message))}</li>`);
+      }
+      if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+        const warningHtml = data.warnings
+          .map((w, i) => `<li>${i + 1}. ${escapeHtml(translateUserMessage(w, data.template))}</li>`)
+          .join('');
+        items.push(`<li>警告：<ul>${warningHtml}</ul></li>`);
+      }
+      return `生成成功。<ul>${items.join('')}</ul>`;
+    }
+
+    function renderPlanText(data) {
       const lines = [];
-      lines.push('生成成功。');
-      lines.push(`模板类型：${data.template}`);
-      lines.push(`零件路径：${data.output_part || '无'}`);
-      lines.push(`工程图路径：${data.output_drawing || '未生成'}`);
-      lines.push(`日志路径：${data.output_log || '无'}`);
+      lines.push(`状态：${translatePlanStatus(data.status)}`);
+      lines.push(`模板：${data.template || '未确定'}`);
+      if (data.summary) lines.push(`摘要：${data.summary}`);
+
+      const explicit = data.explicit_parameters || {};
+      const explicitKeys = Object.keys(explicit);
+      if (explicitKeys.length > 0) {
+        lines.push('明确参数：');
+        explicitKeys.sort().forEach((key) => lines.push(`  - ${key}: ${explicit[key]}`));
+      }
+
+      const inferred = data.inferred_parameters || {};
+      const inferredKeys = Object.keys(inferred);
+      if (inferredKeys.length > 0) {
+        lines.push('推断参数：');
+        inferredKeys.sort().forEach((key) => lines.push(`  - ${key}: ${inferred[key]}`));
+      }
+
+      const suggestedDefaults = data.suggested_defaults || {};
+      const defaultKeys = Object.keys(suggestedDefaults);
+      if (defaultKeys.length > 0) {
+        lines.push('默认补值：');
+        defaultKeys.sort().forEach((key) => lines.push(`  - ${key}: ${suggestedDefaults[key]}`));
+      }
+
+      const proposedOps = Array.isArray(data.proposed_ops) ? data.proposed_ops : [];
+      if (proposedOps.length > 0) {
+        lines.push('提议特征：');
+        proposedOps.forEach((item) => {
+          const label = item.label || item.op || '未命名特征';
+          lines.push(`  - ${label}`);
+          if (item.reason) lines.push(`    原因：${item.reason}`);
+          if (item.arguments && Object.keys(item.arguments).length > 0) {
+            lines.push(`    参数：${JSON.stringify(item.arguments, null, 0)}`);
+          }
+        });
+      }
+
+      if (Array.isArray(data.missing_or_uncertain) && data.missing_or_uncertain.length > 0) {
+        lines.push('待确认：');
+        data.missing_or_uncertain.forEach((item) => lines.push(`  - ${translateUserMessage(item, data.template)}`));
+      }
+
+      if (Array.isArray(data.validation_errors) && data.validation_errors.length > 0) {
+        lines.push('校验问题：');
+        data.validation_errors.forEach((item) => lines.push(`  - ${translateUserMessage(item, data.template)}`));
+      }
+
       if (Array.isArray(data.warnings) && data.warnings.length > 0) {
         lines.push('警告：');
-        data.warnings.forEach((w, i) => lines.push(`  ${i + 1}. ${w}`));
+        data.warnings.forEach((item) => lines.push(`  - ${translateUserMessage(item, data.template)}`));
       }
+
       return lines.join('\n');
     }
 
@@ -448,75 +898,10 @@
       lines.push('生成失败，请检查参数。');
       const tpl = templateSelect.value;
 
-      function paramText(key) {
-        const zh = getZhLabel(tpl, key);
-        return zh === key ? key : `${zh}（${key}）`;
-      }
-
-      function translateMessage(msg) {
-        const map = {
-          'Validation failed': '参数校验失败',
-          'Template not found': '未找到模板',
-          'CAD execution failed': 'CAD 执行失败'
-        };
-        return map[msg] || msg;
-      }
-
-      function translateDetail(raw) {
-        if (!raw) return '';
-        const text = String(raw);
-        let m = null;
-
-        m = text.match(/^Missing required parameters:\s*(.+)$/);
-        if (m) {
-          const keys = m[1].split(',').map((s) => s.trim()).filter(Boolean);
-          return `缺少必填参数：${keys.map(paramText).join('、')}`;
-        }
-
-        m = text.match(/^Parameter '([^']+)' cannot be empty$/);
-        if (m) return `参数 ${paramText(m[1])} 不能为空`;
-
-        m = text.match(/^Parameter '([^']+)' must be numeric$/);
-        if (m) return `参数 ${paramText(m[1])} 必须是数字`;
-
-        m = text.match(/^Parameter '([^']+)'=([-0-9.]+) is lower than min=([-0-9.]+)$/);
-        if (m) return `参数 ${paramText(m[1])}=${m[2]} 低于最小值 ${m[3]}`;
-
-        m = text.match(/^Parameter '([^']+)'=([-0-9.]+) is higher than max=([-0-9.]+)$/);
-        if (m) return `参数 ${paramText(m[1])}=${m[2]} 高于最大值 ${m[3]}`;
-
-        m = text.match(/^Hole array span\s+([-0-9.]+)\s+exceeds allowed span\s+([-0-9.]+)\s+on\s+'([^']+)'$/);
-        if (m) return `孔阵列总跨度 ${m[1]} 超过 ${paramText(m[3])} 允许跨度 ${m[2]}`;
-
-        if (text === 'inner_diameter must be smaller than outer_diameter') {
-          return `内径（inner_diameter）必须小于外径（outer_diameter）`;
-        }
-        if (text === 'hole_count must be >= 1') {
-          return '孔数量（hole_count）必须大于等于 1';
-        }
-        if (text === 'hole_spacing (bolt circle diameter) must be smaller than outer_diameter') {
-          return '孔中心圆直径（hole_spacing）必须小于外径（outer_diameter）';
-        }
-        if (text === 'bolt circle + hole diameter exceeds outer diameter envelope') {
-          return '孔中心圆直径 + 孔径 超出外径包络，请减小孔径或中心圆直径';
-        }
-        if (text === 'bolt circle and hole diameter are close to inner diameter; check wall thickness near holes.') {
-          return '孔中心圆与孔径接近内径，请检查孔附近壁厚';
-        }
-        if (text === 'bend_radius is smaller than plate_thickness. This may fail for real sheet-metal rules.') {
-          return '折弯半径小于板厚，真实钣金规则下可能失败';
-        }
-        if (text === 'hole_diameter is smaller than plate_thickness, machining/manufacturing may be difficult.') {
-          return '孔径小于板厚，加工制造可能困难';
-        }
-
-        return text;
-      }
-
-      if (detail.message) lines.push(`原因：${translateMessage(detail.message)}`);
+      if (detail.message) lines.push(`原因：${translateUserMessage(detail.message, tpl)}`);
       if (Array.isArray(detail.details) && detail.details.length > 0) {
         lines.push('细节：');
-        detail.details.forEach((d, i) => lines.push(`  ${i + 1}. ${translateDetail(d)}`));
+        detail.details.forEach((d, i) => lines.push(`  ${i + 1}. ${translateUserMessage(d, tpl)}`));
       }
       return lines.join('\n');
     }
@@ -539,7 +924,8 @@
         const op = document.createElement('option');
         const zh = templateNameZh[name] || spec.display_name || name;
         op.value = name;
-        op.textContent = `${zh} (${name})`;
+        const suffix = spec.llm_ready ? ' [推荐]' : (spec.support_level === 'partial' ? ' [部分支持]' : '');
+        op.textContent = `${zh} (${name})${suffix}`;
         templateSelect.appendChild(op);
       });
     }
@@ -569,22 +955,162 @@
         }
 
         setStatus('生成成功。', true);
-        resultBox.textContent = renderSuccessText(data);
+        resultBox.innerHTML = renderSuccessHtml(data);
       } catch (err) {
         setStatus('请求失败，请确认服务已启动。', false);
         resultBox.textContent = `请求失败：${String(err)}`;
       }
     }
 
+    async function openResultPath(path) {
+      try {
+        const res = await fetch(`/open-path?path=${encodeURIComponent(path)}`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw data;
+        }
+        setStatus(`已打开目录：${data.opened}`, true);
+      } catch (err) {
+        const detail = err && err.detail ? err.detail : {};
+        const reason = detail.message ? `原因：${detail.message}` : '打开文件目录失败。';
+        setStatus(reason, false);
+      }
+    }
+
+    async function pickOutputDir() {
+      clearStatus();
+      try {
+        const res = await fetch('/pick-output-dir');
+        const data = await res.json();
+        if (!res.ok) {
+          throw data;
+        }
+        if (data.path) {
+          outputDir.value = data.path;
+          setStatus('已选择输出目录。', true);
+        } else {
+          setStatus('未选择目录，已保留当前输入。', false);
+        }
+      } catch (err) {
+        const detail = err && err.detail ? err.detail : {};
+        const reason = detail.message ? `原因：${detail.message}` : '当前环境暂不支持打开目录选择器，请手动填写路径。';
+        setStatus(reason, false);
+      }
+    }
+
+    async function planFromText() {
+      const text = nlInput.value.trim();
+      if (!text) {
+        setStatus('请先输入中文描述。', false);
+        return;
+      }
+
+      planResult.textContent = '解析中...';
+      planResult.classList.remove('result-box-muted');
+      clearStatus();
+
+      try {
+        const res = await fetch('/llm/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw data;
+        }
+
+        planResult.textContent = renderPlanText(data);
+        currentPlan = data;
+        updatePlanGenerateState();
+        if (data.template && templates[data.template]) {
+          templateSelect.value = data.template;
+          renderParams(data.template);
+          Object.entries(data.explicit_parameters || {}).forEach(([key, value]) => {
+            const input = document.querySelector(`[data-param-key="${key}"]`);
+            if (input) {
+              input.value = String(value);
+            }
+          });
+        }
+        const okToGenerate = !btnPlanGenerate.disabled;
+        setStatus(
+          okToGenerate
+            ? (data.status === 'ready'
+              ? '解析建议已生成，可以直接采纳生成。'
+              : '解析建议已生成，当前建议先确认；如接受当前提案，也可以直接采纳生成。')
+            : '解析建议已生成，但当前仍有硬性校验问题，暂时不能直接采纳生成。',
+          okToGenerate
+        );
+      } catch (err) {
+        currentPlan = null;
+        updatePlanGenerateState();
+        const detail = err && err.detail ? err.detail : {};
+        const lines = ['解析失败。'];
+        const tpl = detail.template || templateSelect.value || '';
+        if (detail.message) lines.push(`原因：${translateUserMessage(detail.message, tpl)}`);
+        if (Array.isArray(detail.details)) {
+          detail.details.forEach((item) => lines.push(`  - ${translateUserMessage(item, tpl)}`));
+        }
+        planResult.textContent = lines.join('\n');
+        setStatus('自然语言提案失败，请检查 LLM 配置或稍后重试。', false);
+      }
+    }
+
+    async function generateFromPlan() {
+      if (!currentPlan) {
+        setStatus('当前没有可执行的提案。', false);
+        return;
+      }
+
+      updatePlanGenerateState();
+      if (btnPlanGenerate.disabled) {
+        setStatus('当前提案存在硬性校验问题或没有可采纳参数，暂时不能直接采纳生成。', false);
+        return;
+      }
+
+      if (currentPlan.template && templates[currentPlan.template]) {
+        templateSelect.value = currentPlan.template;
+        renderParams(currentPlan.template);
+      }
+
+      Object.entries(currentPlan.parameter_patch || {}).forEach(([key, value]) => {
+        const input = document.querySelector(`[data-param-key="${key}"]`);
+        if (input) {
+          input.value = String(value);
+        }
+      });
+
+      setStatus('已采纳当前提案并回填参数，开始生成。', true);
+      await generate();
+    }
+
     templateSelect.addEventListener('change', () => {
+      clearPlanState();
       renderParams(templateSelect.value);
       clearStatus();
       resultBox.textContent = '请填写参数后点击“开始生成”。';
     });
 
+    resultBox.addEventListener('click', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const path = target.dataset.openPath;
+      if (!path) return;
+      event.preventDefault();
+      openResultPath(path);
+    });
+
     btnGenerate.addEventListener('click', generate);
+    btnPlan.addEventListener('click', planFromText);
+    btnPlanGenerate.addEventListener('click', generateFromPlan);
+    btnPickOutputDir.addEventListener('click', pickOutputDir);
     btnReset.addEventListener('click', clearInputsKeepDefaults);
 
+    clearPlanState();
     loadTemplates()
       .then(() => {
         setStatus('模板加载成功，请先选择零件类型。', true);

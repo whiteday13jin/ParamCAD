@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from app.core.env_loader import load_local_env
 from app.core.models import ParsedInput, PipelineError, PipelineOptions
 from app.services.input_parser import InputParser
 from app.services.pipeline import GenerationPipeline
@@ -45,6 +46,7 @@ def parse_input(args: argparse.Namespace) -> tuple[str, ParsedInput]:
 def main() -> int:
     args = build_parser().parse_args()
     project_root = Path(__file__).resolve().parents[1]
+    load_local_env(project_root / ".env")
     output_root = args.output_dir if args.output_dir else (project_root / "output")
 
     options = PipelineOptions(
@@ -66,6 +68,8 @@ def main() -> int:
             print(f"Drawing: {result.output_drawing}")
         print(f"Macro: {result.macro_path}")
         print(f"Log: {result.output_log}")
+        if result.cad_message:
+            print(f"CAD: {result.cad_message}")
         if result.warnings:
             print("Warnings:")
             for warning in result.warnings:

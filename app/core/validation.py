@@ -6,9 +6,32 @@ from .models import TemplateDefinition, ValidationResult
 
 
 class Validator:
-    def validate(self, template: TemplateDefinition, parameters: dict[str, Any]) -> ValidationResult:
+    def validate(
+        self,
+        template: TemplateDefinition,
+        parameters: dict[str, Any],
+        executable_parameters: set[str] | None = None,
+    ) -> ValidationResult:
         merged: dict[str, Any] = dict(parameters)
         defaults_applied: dict[str, Any] = {}
+        declared_keys = self._declared_keys(template)
+
+        errors: list[str] = []
+        warnings: list[str] = []
+
+        unknown = sorted(set(parameters) - declared_keys)
+        if unknown:
+            errors.append(f"Unknown parameters for template '{template.name}': {', '.join(unknown)}")
+
+        if executable_parameters is not None:
+            inactive_supplied = sorted(
+                key for key in parameters if key in declared_keys and key not in executable_parameters
+            )
+            for key in inactive_supplied:
+                warnings.append(
+                    f"Parameter '{key}' is accepted by the template schema, "
+                    "but it is not connected to the active SolidWorks executor yet."
+                )
 
         for key, value in template.defaults.items():
             if key not in merged:
@@ -16,9 +39,6 @@ class Validator:
                 defaults_applied[key] = value
 
         missing = [key for key in template.required if key not in merged]
-        errors: list[str] = []
-        warnings: list[str] = []
-
         if missing:
             errors.append(f"Missing required parameters: {', '.join(missing)}")
 
@@ -31,6 +51,8 @@ class Validator:
                     continue
                 value = self._parse_number_if_possible(stripped)
             normalized[key] = value
+
+        self._validate_integer_parameters(normalized, errors)
 
         for key, rule in template.bounds.items():
             if key not in normalized:
@@ -97,7 +119,11 @@ class Validator:
                     errors.append("bolt circle + hole diameter exceeds outer diameter envelope")
 
             if all(isinstance(v, (int, float)) for v in [inner_d, hole_d, bolt_circle_d]):
-                if bolt_circle_d - hole_d < inner_d:
+                if bolt_circle_d - hole_d <= inner_d:
+                    errors.append(
+                        "bolt circle diameter is too small for the inner diameter and hole diameter combination"
+                    )
+                elif bolt_circle_d - hole_d < inner_d + 4:
                     warnings.append(
                         "bolt circle and hole diameter are close to inner diameter; check wall thickness near holes."
                     )
@@ -127,9 +153,12 @@ class Validator:
         array_span = (int(hole_count) - 1) * hole_spacing
         min_edge_margin = 1.5 * hole_diameter
         allowed_span = axis_size - 2 * min_edge_margin
+        required_axis_size = array_span + 2 * min_edge_margin
         if array_span > allowed_span:
             errors.append(
-                f"Hole array span {array_span} exceeds allowed span {allowed_span:.2f} on '{axis_key}'"
+                f"Hole array span {array_span} exceeds allowed span {allowed_span:.2f} on '{axis_key}' "
+                f"(hole_count={int(hole_count)}, hole_spacing={hole_spacing}, hole_diameter={hole_diameter}, "
+                f"required_{axis_key}>={required_axis_size:.2f})"
             )
 
     @staticmethod
@@ -141,3 +170,21 @@ class Validator:
                 warnings.append(
                     "hole_diameter is smaller than plate_thickness, machining/manufacturing may be difficult."
                 )
+
+    @staticmethod
+    def _declared_keys(template: TemplateDefinition) -> set[str]:
+        keys = set(template.required)
+        keys.update(template.defaults.keys())
+        keys.update(template.bounds.keys())
+        return keys
+
+    @staticmethod
+    def _validate_integer_parameters(params: dict[str, Any], errors: list[str]) -> None:
+        for key in ("hole_count", "mounting_holes"):
+            if key not in params:
+                continue
+            value = params[key]
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            if int(value) != value:
+                errors.append(f"Parameter '{key}' must be an integer")

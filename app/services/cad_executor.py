@@ -43,6 +43,7 @@ class DryRunExecutor:
             message="Dry-run execution completed.",
             part_path=output_part_path,
             drawing_path=output_drawing_path,
+            details=payload,
         )
 
 
@@ -76,6 +77,7 @@ class SolidWorksExecutor:
         if not model_template_path.exists():
             raise FileNotFoundError(f"SolidWorks template model not found: {model_template_path}")
 
+        pythoncom.CoInitialize()
         sw_app = win32com.client.Dispatch("SldWorks.Application")
         sw_app.Visible = self.visible
 
@@ -106,6 +108,9 @@ class SolidWorksExecutor:
                 template_name=template_name,
                 parameters=parameters,
             )
+            if binding_status["failed_parameters"]:
+                failed = ", ".join(binding_status["failed_parameters"])
+                raise RuntimeError(f"Parameter binding failed for: {failed}")
 
             macro_status = self._run_macro_best_effort(sw_app, macro_path)
 
@@ -129,30 +134,52 @@ class SolidWorksExecutor:
                     encoding="utf-8",
                 )
 
-            message = " ".join([geometry_status, binding_status, macro_status]).strip()
+            message = " ".join(
+                [
+                    geometry_status,
+                    self._binding_report_message(binding_status),
+                    macro_status["message"],
+                ]
+            ).strip()
             return ExecutionResult(
                 success=True,
                 message=message,
                 part_path=output_part_path,
                 drawing_path=output_drawing_path,
+                details={
+                    "executor": "solidworks",
+                    "template_bodies_before": bodies_before,
+                    "template_bodies_after": bodies_after,
+                    "binding_report": binding_status,
+                    "macro_report": macro_status,
+                },
             )
         finally:
             if model is not None:
                 sw_app.CloseDoc(model.GetTitle)
+            pythoncom.CoUninitialize()
 
     def _apply_parameter_bindings(
         self,
         model: Any,
         template_name: str,
         parameters: dict[str, Any],
-    ) -> str:
+    ) -> dict[str, Any]:
         template_bindings = self._load_bindings().get(template_name, [])
         if not template_bindings:
-            return "No parameter bindings configured for this template."
+            return {
+                "configured_bindings": 0,
+                "applied_dimension_writes": 0,
+                "missing_dimensions": [],
+                "bad_values": [],
+                "parameter_reports": {},
+                "failed_parameters": [],
+            }
 
         applied = 0
         missing_dims: list[str] = []
         bad_values: list[str] = []
+        parameter_reports: dict[str, dict[str, Any]] = {}
 
         for item in template_bindings:
             param_keys = []
@@ -165,6 +192,8 @@ class SolidWorksExecutor:
             if not param_keys:
                 continue
 
+            canonical_name = param_keys[0]
+
             raw_value = None
             for k in param_keys:
                 if k in parameters:
@@ -175,27 +204,49 @@ class SolidWorksExecutor:
 
             unit = str(item.get("unit", "mm")).lower()
             converted = self._convert_value(raw_value, unit)
-            if converted is None:
-                bad_values.append(f"{param_keys[0]}={raw_value}")
-                continue
-
             targets = item.get("targets", [])
             if not isinstance(targets, list):
+                targets = []
+
+            param_report = {
+                "raw_value": raw_value,
+                "unit": unit,
+                "target_count": len(targets),
+                "applied_targets": [],
+                "missing_targets": [],
+            }
+            if converted is None:
+                bad_values.append(f"{canonical_name}={raw_value}")
+                param_report["bad_value"] = True
+                parameter_reports[canonical_name] = param_report
                 continue
+
             for dim_name in targets:
                 if not isinstance(dim_name, str) or not dim_name:
                     continue
                 if self._set_dimension(model, dim_name, converted):
                     applied += 1
+                    param_report["applied_targets"].append(dim_name)
                 else:
                     missing_dims.append(dim_name)
+                    param_report["missing_targets"].append(dim_name)
 
-        status = f"Bindings applied: {applied} dimension writes."
-        if missing_dims:
-            status += f" Missing dimensions: {len(missing_dims)}."
-        if bad_values:
-            status += f" Skipped invalid values: {', '.join(bad_values)}."
-        return status
+            parameter_reports[canonical_name] = param_report
+
+        failed_parameters = sorted(
+            name
+            for name, report in parameter_reports.items()
+            if not report["applied_targets"] and report["target_count"] > 0 and not report.get("bad_value")
+        )
+
+        return {
+            "configured_bindings": len(template_bindings),
+            "applied_dimension_writes": applied,
+            "missing_dimensions": missing_dims,
+            "bad_values": bad_values,
+            "parameter_reports": parameter_reports,
+            "failed_parameters": failed_parameters,
+        }
 
     def _load_bindings(self) -> dict[str, list[dict[str, Any]]]:
         if self._bindings_cache is not None:
@@ -372,19 +423,31 @@ class SolidWorksExecutor:
         )
 
     @staticmethod
-    def _run_macro_best_effort(sw_app: object, macro_path: Path) -> str:
+    def _run_macro_best_effort(sw_app: object, macro_path: Path) -> dict[str, Any]:
         """Try macro only when explicitly enabled; otherwise skip to avoid modal popup loops."""
         if os.getenv("PARAMCAD_ENABLE_SW_MACRO", "").lower() not in {"1", "true", "yes"}:
-            return "Macro execution skipped (default safe mode)."
+            return {
+                "executed": False,
+                "status": "skipped",
+                "message": "Macro execution skipped (default safe mode).",
+            }
 
         if not macro_path.exists():
-            return "Macro file missing. Continued without macro execution."
+            return {
+                "executed": False,
+                "status": "missing",
+                "message": "Macro file missing. Continued without macro execution.",
+            }
 
         try:
             import pythoncom  # type: ignore
             import win32com.client  # type: ignore
         except ImportError:
-            return "Macro dependencies unavailable. Continued without macro execution."
+            return {
+                "executed": False,
+                "status": "dependency-missing",
+                "message": "Macro dependencies unavailable. Continued without macro execution.",
+            }
 
         candidates = [
             ("main", ""),
@@ -399,12 +462,39 @@ class SolidWorksExecutor:
                 err_code = win32com.client.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, 0)
                 run_ok = sw_app.RunMacro2(str(macro_path), module_name, proc_name, 0, err_code)
                 if run_ok:
-                    return f"Macro executed with module='{module_name}' proc='{proc_name}'."
+                    return {
+                        "executed": True,
+                        "status": "ok",
+                        "message": f"Macro executed with module='{module_name}' proc='{proc_name}'.",
+                        "module": module_name,
+                        "procedure": proc_name,
+                    }
                 last_error_code = err_code.value
             except Exception:
                 continue
 
-        return (
-            "Macro execution failed in best-effort mode; model was saved from template anyway. "
-            f"Last macro error code: {last_error_code}"
-        )
+        return {
+            "executed": False,
+            "status": "failed",
+            "message": (
+                "Macro execution failed in best-effort mode; model was saved from template anyway. "
+                f"Last macro error code: {last_error_code}"
+            ),
+            "last_error_code": last_error_code,
+        }
+
+    @staticmethod
+    def _binding_report_message(report: dict[str, Any]) -> str:
+        configured = report.get("configured_bindings", 0)
+        applied = report.get("applied_dimension_writes", 0)
+        if configured == 0:
+            return "No parameter bindings configured for this template."
+
+        message = f"Bindings applied: {applied} dimension writes."
+        missing_dims = report.get("missing_dimensions", [])
+        bad_values = report.get("bad_values", [])
+        if missing_dims:
+            message += f" Missing dimensions: {len(missing_dims)}."
+        if bad_values:
+            message += f" Skipped invalid values: {', '.join(bad_values)}."
+        return message

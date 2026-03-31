@@ -3,6 +3,15 @@
     "display_name": "Motor/Gearbox Mount Bracket",
     "macro_template": "motor_mount_bracket.vba",
     "model_template": "motor_mount_bracket.SLDPRT",
+    "support_level": "partial",
+    "llm_ready": true,
+    "status_notes": [
+      "当前优先支持长度、宽度、高度、板厚、孔径、孔距。",
+      "当前模型实质上按固定 4 孔布局工作，length、hole_spacing、hole_diameter 之间存在联动约束。",
+      "按当前 4 孔布局，经验上需满足：length >= 3 * hole_spacing + 3 * hole_diameter。",
+      "上述可见参数已做真实生成扫描，当前表现稳定。",
+      "孔数量与圆角半径尚未稳定接入执行器，暂不建议作为首个 LLM 模板。"
+    ],
     "required": [
       "length",
       "width",
@@ -32,12 +41,19 @@
       "hole_spacing": { "min": 1, "max": 300 },
       "fillet_radius": { "min": 0, "max": 100 }
     },
-    "summary_keys": ["length", "width", "height", "hole_diameter", "hole_count"]
+    "summary_keys": ["length", "width", "height", "hole_diameter", "hole_spacing"]
   },
   "flange_connector_plate": {
     "display_name": "Flange / Connector Plate",
     "macro_template": "flange_connector_plate.vba",
     "model_template": "flange_connector_plate.SLDPRT",
+    "support_level": "stable",
+    "llm_ready": true,
+    "status_notes": [
+      "当前模板参数与执行绑定完整度最高，适合作为后续 LLM MVP 的首选模板。",
+      "已按真实 SolidWorks 重建结果收窄到经验稳定区间，并优先使用参数关系校验而非过紧的静态上限。",
+      "建议仍结合输出日志复核执行结果。"
+    ],
     "required": [
       "outer_diameter",
       "inner_diameter",
@@ -55,13 +71,13 @@
       "boss_height": 10
     },
     "bounds": {
-      "outer_diameter": { "min": 20, "max": 2000 },
-      "inner_diameter": { "min": 1, "max": 1800 },
-      "plate_thickness": { "min": 1, "max": 300 },
-      "hole_count": { "min": 1, "max": 200 },
-      "hole_diameter": { "min": 1, "max": 200 },
-      "hole_spacing": { "min": 1, "max": 400 },
-      "boss_height": { "min": 0, "max": 300 }
+      "outer_diameter": { "min": 140, "max": 1000 },
+      "inner_diameter": { "min": 110, "max": 900 },
+      "plate_thickness": { "min": 8, "max": 120 },
+      "hole_count": { "min": 1, "max": 120 },
+      "hole_diameter": { "min": 1, "max": 80 },
+      "hole_spacing": { "min": 120, "max": 400 },
+      "boss_height": { "min": 0, "max": 40 }
     },
     "summary_keys": ["outer_diameter", "inner_diameter", "hole_diameter", "hole_count"]
   },
@@ -69,6 +85,13 @@
     "display_name": "Sheet Metal Cover",
     "macro_template": "sheet_metal_cover.vba",
     "model_template": "sheet_metal_cover.SLDPRT",
+    "support_level": "partial",
+    "llm_ready": true,
+    "status_notes": [
+      "当前优先支持外形尺寸和板厚。",
+      "length、width、height、plate_thickness 这组可见参数已做真实生成扫描，当前表现稳定。",
+      "折弯半径、安装孔数量、开孔位置仍未稳定接入执行器，暂不建议进入 LLM 自动规划范围。"
+    ],
     "required": [
       "length",
       "width",
@@ -93,6 +116,6 @@
       "bend_radius": { "min": 0.1, "max": 200 },
       "mounting_holes": { "min": 0, "max": 300 }
     },
-    "summary_keys": ["length", "width", "height", "plate_thickness", "bend_radius"]
+    "summary_keys": ["length", "width", "height", "plate_thickness"]
   }
 }
