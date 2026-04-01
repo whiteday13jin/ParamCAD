@@ -31,3 +31,6 @@ output/**
 
 # Build artifacts
 *.log
+
+# Local docs
+docs/code_reading_order_zh.md
