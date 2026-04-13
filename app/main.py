@@ -11,6 +11,8 @@ from app.services.pipeline import GenerationPipeline
 
 
 def build_parser() -> argparse.ArgumentParser:
+    # CLI 入口只负责描述“用户能怎么启动这条流水线”，
+    # 不负责真正的业务处理。这样 CLI、API 才能共用后面的核心逻辑。
     parser = argparse.ArgumentParser(description="ParamCAD generator")
     parser.add_argument("--input", type=Path, help="Path to JSON input file")
     parser.add_argument("--excel", type=Path, help="Path to Excel input file")
@@ -31,6 +33,8 @@ def parse_input(args: argparse.Namespace) -> tuple[str, ParsedInput]:
     parser = InputParser()
 
     if args.payload:
+        # 内联 payload 最接近 API 的调用方式，所以先复用 parse_payload，
+        # 让 CLI 和 Web 最终都收口到同一种内部数据结构。
         payload = json.loads(args.payload)
         return "payload", parser.parse_payload(payload, source="json-inline")
 
@@ -49,6 +53,8 @@ def main() -> int:
     load_local_env(project_root / ".env")
     output_root = args.output_dir if args.output_dir else (project_root / "output")
 
+    # PipelineOptions 是“运行环境配置”，例如静态资源目录、输出目录、是否真实 CAD。
+    # 它和用户输入的业务参数是两类数据，分开后主流程更容易保持清晰。
     options = PipelineOptions(
         project_root=project_root,
         output_root=output_root,
@@ -59,6 +65,7 @@ def main() -> int:
 
     try:
         _, parsed = parse_input(args)
+        # 真正的业务装配从这里开始。入口层只把输入整理好，然后把后续职责交给 pipeline。
         pipeline = GenerationPipeline(options)
         result = pipeline.run(parsed)
         print("Run succeeded")

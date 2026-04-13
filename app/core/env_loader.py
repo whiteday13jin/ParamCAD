@@ -24,4 +24,5 @@ def load_local_env(env_path: Path | None = None) -> None:
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
             value = value[1:-1]
 
+        # setdefault 的意思是：如果外部环境已经显式给了值，就尊重外部，不用本地 .env 覆盖。
         os.environ.setdefault(key, value)

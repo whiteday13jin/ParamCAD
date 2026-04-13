@@ -22,6 +22,8 @@ class OutputManager:
         summary = self._build_summary(template, params)
         prefix = f"{template.name}_{summary}"
 
+        # 版本号不是靠全局计数器，而是扫描现有产物得到。
+        # 这样即使多次单独运行，也能自然避免覆盖历史结果。
         version = self._next_version(prefix)
         basename = f"{prefix}_v{version}"
 
@@ -38,10 +40,13 @@ class OutputManager:
 
     def write_log(self, log_path: Path, payload: dict[str, Any]) -> None:
         payload = dict(payload)
+        # 这里额外写 logged_at，是为了把“业务生成时间”和“日志落盘时间”区分开。
         payload["logged_at"] = datetime.utcnow().isoformat()
         log_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _build_summary(self, template: TemplateDefinition, params: dict[str, Any]) -> str:
+        # summary_keys 允许模板自己决定文件名里最值得保留的参数摘要，
+        # 这样输出文件在目录里会更容易人工辨认。
         keys = template.summary_keys if template.summary_keys else sorted(params.keys())[:4]
         tokens = []
         for key in keys:

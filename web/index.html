@@ -435,6 +435,8 @@
     const statusBox = document.getElementById('status');
     const resultBox = document.getElementById('result');
 
+    // templates 保存的是后端 /templates 返回的“模板能力画像”。
+    // currentPlan 保存的是最近一次 LLM 提案结果，前端所有“是否可采纳”的判断都围绕它展开。
     let templates = {};
     let currentPlan = null;
 
@@ -498,6 +500,8 @@
     }
 
     function updatePlanGenerateState() {
+      // 前端不会只看 status 文本，而是把“有无 patch / 有无硬性校验错误 / 是否 unsupported”
+      // 这些条件一起合并，决定“采纳生成”按钮是否可用。
       const hasValidationErrors = Array.isArray(currentPlan?.validation_errors) && currentPlan.validation_errors.length > 0;
       const hasPatch = currentPlan?.parameter_patch && Object.keys(currentPlan.parameter_patch).length > 0;
       const canAdopt = currentPlan
@@ -688,6 +692,8 @@
       const notes = Array.isArray(spec.status_notes) ? [...spec.status_notes] : [];
       const hidden = Array.isArray(spec.hidden_parameters) ? spec.hidden_parameters : [];
       if (hidden.length > 0) {
+        // 前端会明确提示“有参数被隐藏”，这样你在学结构时能意识到：
+        // schema 里有的字段，不等于当前页面和执行器一定开放给用户。
         notes.push(`当前界面已隐藏 ${hidden.length} 个未稳定接入执行器的参数。`);
       }
       const notesHtml = notes.length > 0
@@ -732,6 +738,8 @@
             ...(spec.required || [])
           ])).sort();
 
+      // 参数表不是写死的，而是根据 /templates 返回的配置动态渲染。
+      // 这说明前端只是“模板能力的可视化界面”，不是另一套手写业务规则。
       keys.forEach((key) => {
         const row = document.createElement('div');
         row.className = 'param-row';
@@ -793,6 +801,7 @@
         const key = input.dataset.paramKey;
         const raw = input.value.trim();
         if (!raw) return;
+        // 这里先做轻量 number-like 转换，减少后端收到的字符串噪音。
         payload[key] = isNumberLike(raw) ? Number(raw) : raw;
       });
 
@@ -1027,6 +1036,8 @@
         currentPlan = data;
         updatePlanGenerateState();
         if (data.template && templates[data.template]) {
+          // 一旦 planner 已经识别出模板，前端会自动切换模板并回填“明确提取”的参数，
+          // 这样用户能立刻看到 LLM 认为自己读懂了什么。
           templateSelect.value = data.template;
           renderParams(data.template);
           Object.entries(data.explicit_parameters || {}).forEach(([key, value]) => {
@@ -1080,6 +1091,8 @@
       Object.entries(currentPlan.parameter_patch || {}).forEach(([key, value]) => {
         const input = document.querySelector(`[data-param-key="${key}"]`);
         if (input) {
+          // 采纳提案的本质不是“走另一条 API”，
+          // 而是先把 parameter_patch 回填成普通表单值，再复用原本的 /generate 流程。
           input.value = String(value);
         }
       });

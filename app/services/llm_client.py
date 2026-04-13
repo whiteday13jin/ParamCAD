@@ -16,6 +16,7 @@ class LLMSettings:
 
     @classmethod
     def from_env(cls) -> "LLMSettings":
+        # 这里优先从环境变量拿配置，让本地开发、桌面启动、服务部署都能复用同一套代码。
         api_key = os.getenv("PARAMCAD_LLM_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
         if not api_key:
             raise RuntimeError("缺少 LLM API Key，请先配置 PARAMCAD_LLM_API_KEY 或 DASHSCOPE_API_KEY。")
@@ -43,6 +44,8 @@ class OpenAICompatibleLLMClient:
         messages: list[dict[str, str]],
         temperature: float = 0.1,
     ) -> str:
+        # 这里故意只实现最小化的 OpenAI 兼容 chat 接口，
+        # 让 planner 只关心“给消息、拿文本”，而不关心底层 HTTP 细节。
         payload = {
             "model": self.settings.model,
             "messages": messages,
@@ -79,6 +82,8 @@ def extract_first_json_object(text: str) -> dict[str, Any]:
     if text.startswith("{") and text.endswith("}"):
         return json.loads(text)
 
+    # 真实模型经常会输出“解释 + JSON”或代码块包裹的 JSON。
+    # 这里手动扫描第一个完整对象，是为了让上层 planner 仍能稳定消费结构化结果。
     start = text.find("{")
     if start < 0:
         raise ValueError("LLM 返回内容中未包含可解析的 JSON 对象")

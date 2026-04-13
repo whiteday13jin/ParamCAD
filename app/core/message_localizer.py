@@ -41,6 +41,8 @@ def localize_message(raw: str, template_name: str | None = None) -> str:
     if not text:
         return ""
 
+    # 这一层把“内部统一错误文本”翻译成更适合中文界面显示的话术。
+    # 好处是：后端内部仍能保持相对统一的英文/技术信息，而 UI 不用直接暴露生硬原文。
     if text in {
         "部分已声明参数尚未稳定接入当前 SolidWorks 尺寸绑定。",
         "部分必填参数当前仍会参与校验，但修改它们未必会真实影响模型。",

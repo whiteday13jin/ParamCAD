@@ -31,6 +31,8 @@ def _build_pipeline(
 ) -> GenerationPipeline:
     project_root = PROJECT_ROOT
     output_root = Path(output_dir) if output_dir else (project_root / "output")
+    # API 和 CLI 都通过 PipelineOptions 去描述运行上下文，
+    # 这样“入口不同、核心逻辑相同”的结构会非常明确。
     options = PipelineOptions(
         project_root=project_root,
         output_root=output_root,
@@ -42,6 +44,8 @@ def _build_pipeline(
 
 
 def _build_llm_planner() -> ParamCADLLMPlanner:
+    # LLM planner 自己不直接持有全局单例，而是按需组装依赖。
+    # 这样每次请求都能明确看到：模板定义、能力检查、规则校验、LLM 客户端是如何协作的。
     manager = TemplateManager(STATIC_ROOT / "template_registry.json")
     capability_inspector = TemplateCapabilityInspector(STATIC_ROOT / "template_bindings.json")
     validator = Validator()
@@ -133,6 +137,8 @@ def templates() -> dict[str, Any]:
     data = {}
     for name, spec in manager.load().items():
         capability_report = capability_inspector.describe(spec)
+        # partial 模板会刻意只把“当前稳定可执行”的参数暴露给前端，
+        # 避免界面把用户引到暂未真正接通的字段上。
         visible_parameters = capability_report["effective_parameters"] if spec.support_level != "stable" else capability_report["declared_parameters"]
         hidden_parameters = sorted(set(capability_report["declared_parameters"]) - set(visible_parameters))
         data[name] = {
@@ -160,12 +166,15 @@ def generate(payload: dict[str, Any]) -> dict[str, Any]:
     output_dir = payload.get("output_dir")
     output_dir = str(output_dir) if output_dir is not None else None
 
+    # 这几个字段属于“运行控制参数”，不应该混进业务参数里一起校验，
+    # 所以在 parse_payload 之前先从 payload 中剥离出来。
     cleaned_payload = dict(payload)
     cleaned_payload.pop("use_real_cad", None)
     cleaned_payload.pop("generate_drawing", None)
     cleaned_payload.pop("output_dir", None)
 
     parser = InputParser()
+    # Web 入口最终也收口成 ParsedInput，后面的 pipeline 因而无需关心输入来自页面还是文件。
     parsed = parser.parse_payload(cleaned_payload, source="web-api")
 
     pipeline = _build_pipeline(
@@ -203,6 +212,8 @@ def generate(payload: dict[str, Any]) -> dict[str, Any]:
 def llm_plan(payload: LLMPlanRequest) -> dict[str, Any]:
     try:
         planner = _build_llm_planner()
+        # 这条接口只做“提案”，不做真实生成。
+        # 用户先看到参数 patch、默认值建议和风险提示，再决定是否采纳。
         result = planner.plan(payload.text)
         return result.model_dump()
     except RuntimeError as exc:

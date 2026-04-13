@@ -19,6 +19,8 @@ class DryRunExecutor:
         output_part_path: Path,
         output_drawing_path: Path | None = None,
     ) -> ExecutionResult:
+        # dry-run 的意义不是“假装成功”，而是把将要执行的上下文完整落盘，
+        # 让你在没有 SolidWorks 环境时也能先调通上游参数与流程。
         output_part_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "note": "dry-run mode: no real CAD execution was performed",
@@ -77,6 +79,7 @@ class SolidWorksExecutor:
         if not model_template_path.exists():
             raise FileNotFoundError(f"SolidWorks template model not found: {model_template_path}")
 
+        # 真实 COM 调用前显式初始化，是为了把 SolidWorks 自动化和普通 Python 逻辑隔开。
         pythoncom.CoInitialize()
         sw_app = win32com.client.Dispatch("SldWorks.Application")
         sw_app.Visible = self.visible
@@ -98,6 +101,8 @@ class SolidWorksExecutor:
 
             bodies_before = self._solid_body_count(model)
             if bodies_before == 0:
+                # 如果模板本身没有实体，就先造一个最小兜底几何。
+                # 这能帮助区分“模板空了”和“参数写回后把模型搞坏了”这两类问题。
                 self._build_default_geometry(model, template_name, parameters)
                 geometry_status = "Template was empty, built fallback base geometry."
             else:
@@ -109,14 +114,19 @@ class SolidWorksExecutor:
                 parameters=parameters,
             )
             if binding_status["failed_parameters"]:
+                # 这里按“参数级”失败，而不是“某个尺寸句柄失败就直接中断”，
+                # 因为一个业务参数可能对应多个底层尺寸，最后要看它是否整体写成功。
                 failed = ", ".join(binding_status["failed_parameters"])
                 raise RuntimeError(f"Parameter binding failed for: {failed}")
 
+            # 宏不是主路径，只做 best-effort 补充。
             macro_status = self._run_macro_best_effort(sw_app, macro_path)
 
             model.ForceRebuild3(False)
             bodies_after = self._solid_body_count(model)
             if bodies_after == 0:
+                # rebuild 后没有实体，通常说明参数组合把几何关系推崩了，
+                # 所以这里直接把它当成硬失败拦住。
                 raise RuntimeError(
                     "Model rebuild resulted in zero solid bodies. "
                     "Please adjust parameters or template constraints."
@@ -182,6 +192,8 @@ class SolidWorksExecutor:
         parameter_reports: dict[str, dict[str, Any]] = {}
 
         for item in template_bindings:
+            # 一个 binding item 描述的是：
+            # “某个业务参数，可能带若干别名，要写到哪些 SolidWorks 尺寸句柄上”。
             param_keys = []
             key = item.get("param")
             if isinstance(key, str) and key:
@@ -197,6 +209,7 @@ class SolidWorksExecutor:
             raw_value = None
             for k in param_keys:
                 if k in parameters:
+                    # aliases 让同一个模板参数可以兼容不同来源或旧命名。
                     raw_value = parameters[k]
                     break
             if raw_value is None:
@@ -216,6 +229,8 @@ class SolidWorksExecutor:
                 "missing_targets": [],
             }
             if converted is None:
+                # 参数值无法转成目标单位时，不直接炸整个流程，
+                # 先把它记入 report，最后再决定是否构成参数级失败。
                 bad_values.append(f"{canonical_name}={raw_value}")
                 param_report["bad_value"] = True
                 parameter_reports[canonical_name] = param_report
@@ -228,6 +243,8 @@ class SolidWorksExecutor:
                     applied += 1
                     param_report["applied_targets"].append(dim_name)
                 else:
+                    # 缺尺寸句柄通常意味着模板文件被改过名、特征名变了，
+                    # 或 binding 文件和真实 SLDPRT 已经不同步。
                     missing_dims.append(dim_name)
                     param_report["missing_targets"].append(dim_name)
 
@@ -239,6 +256,8 @@ class SolidWorksExecutor:
             if not report["applied_targets"] and report["target_count"] > 0 and not report.get("bad_value")
         )
 
+        # failed_parameters 是“业务参数级”的失败结果，
+        # 这比直接暴露底层尺寸写失败更适合上层做错误汇总。
         return {
             "configured_bindings": len(template_bindings),
             "applied_dimension_writes": applied,
@@ -270,6 +289,7 @@ class SolidWorksExecutor:
             dim = model.Parameter(dim_name)
             if dim is None:
                 return False
+            # SolidWorks 的尺寸写回使用 SystemValue，因此这里必须传系统单位值。
             dim.SystemValue = float(value)
             return True
         except Exception:
@@ -283,8 +303,10 @@ class SolidWorksExecutor:
             return None
 
         if unit == "mm":
+            # SolidWorks 常用系统长度单位是米，所以外部 mm 输入要在这里统一换算。
             return numeric / 1000.0
         if unit == "count":
+            # count 类参数虽然来自业务层，但进入尺寸/阵列时必须是离散整数。
             return float(max(1, int(round(numeric))))
         if unit == "deg":
             return math.radians(numeric)
@@ -299,6 +321,7 @@ class SolidWorksExecutor:
             return 0
 
     def _build_default_geometry(self, model: Any, template_name: str, parameters: dict[str, Any]) -> None:
+        # 兜底几何不是为了完全复刻模板，而是为了确认当前模板至少能生成一个基本实体。
         if template_name == "flange_connector_plate":
             self._create_flange_plate(model, parameters)
         elif template_name == "sheet_metal_cover":
@@ -456,6 +479,8 @@ class SolidWorksExecutor:
             ("Main", "main"),
         ]
 
+        # 宏模块名/过程名在不同模板里并不总是统一，
+        # 所以这里按若干常见候选做 best-effort 尝试，而不是假设只有一种入口。
         last_error_code = None
         for module_name, proc_name in candidates:
             try:
@@ -490,6 +515,7 @@ class SolidWorksExecutor:
         if configured == 0:
             return "No parameter bindings configured for this template."
 
+        # 返回一条人能快速扫懂的摘要消息，同时把详细 report 放进 details。
         message = f"Bindings applied: {applied} dimension writes."
         missing_dims = report.get("missing_dimensions", [])
         bad_values = report.get("bad_values", [])

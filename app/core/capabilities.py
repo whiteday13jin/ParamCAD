@@ -12,6 +12,8 @@ class TemplateCapabilityInspector:
         self._bindings_cache: dict[str, list[dict[str, object]]] | None = None
 
     def describe(self, template: TemplateDefinition) -> dict[str, object]:
+        # 这层做的不是“参数定义”，而是“真实可执行能力盘点”。
+        # declared 来自模板 schema，bound 来自 SolidWorks 尺寸绑定，两者不一定相同。
         declared = self._declared_parameters(template)
         bound = self._bound_parameters(template.name)
         inactive = sorted(declared - bound)
@@ -28,6 +30,9 @@ class TemplateCapabilityInspector:
             )
 
         return {
+            # declared_parameters: 模板层面声明了什么
+            # effective_parameters: 当前执行器真正能稳定写入什么
+            # inactive_parameters: schema 有，但还没接通执行器的字段
             "declared_parameters": sorted(declared),
             "effective_parameters": sorted(bound),
             "inactive_parameters": inactive,
@@ -50,6 +55,8 @@ class TemplateCapabilityInspector:
         for item in bindings:
             param = item.get("param")
             if isinstance(param, str) and param:
+                # 这里关注的是“哪个业务参数被接上了”，
+                # 而不是具体接到了多少个尺寸句柄。
                 params.add(param)
         return params
 

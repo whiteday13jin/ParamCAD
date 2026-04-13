@@ -33,6 +33,10 @@ class InputParser:
         if not template:
             raise ValueError("Input 'template' cannot be empty")
 
+        # payload 支持两种写法：
+        # 1. {"template": "...", "parameters": {...}}
+        # 2. {"template": "...", "length": 100, ...}
+        # 这里统一把它们压平成同一种 parameters 结构，后续逻辑就不必关心输入来源差异。
         params = dict(payload.get("parameters", {}))
         for key, value in payload.items():
             if key in {"template", "parameters"}:
@@ -47,6 +51,7 @@ class InputParser:
         lower_headers = [str(cell).strip().lower() for cell in first_row]
 
         if set(lower_headers) >= {"parameter", "value"}:
+            # 这种模式更像“键值表”，适合人工逐项填写参数。
             param_idx = lower_headers.index("parameter")
             value_idx = lower_headers.index("value")
             payload: dict[str, Any] = {}
@@ -61,6 +66,7 @@ class InputParser:
             return payload
 
         # Header/value style: row0 = keys, row1 = values
+        # 这种模式更像“单条记录”，适合导出或脚本生成。
         if len(rows) < 2:
             raise ValueError("Excel must have at least two rows for header/value mode")
 

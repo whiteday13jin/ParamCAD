@@ -36,10 +36,14 @@ class BaseTemplateLLMPlanner:
         if not template.llm_ready:
             raise RuntimeError(f"模板 {template.name} 尚未标记为 llm_ready")
 
+        # visible_parameters 不是“模板声明的全部参数”，
+        # 而是当前这条 LLM 提案链路被允许触达的稳定参数范围。
         visible_parameters = self._visible_parameters(template)
         proposed_ops = self._extract_proposed_ops(source_text)
         lowered = source_text.lower()
         if proposed_ops and not any(key.lower() in lowered for key in self._all_parameter_aliases()):
+            # 如果用户描述里只有超范围特征，而没有稳定参数，
+            # 那就直接作为 unsupported/proposal_only 返回，不进入后面的 LLM 数值提取。
             return LLMPlanResponse(
                 status="unsupported",
                 template=None,
@@ -62,6 +66,7 @@ class BaseTemplateLLMPlanner:
             temperature=0.0,
         )
         raw_plan = extract_first_json_object(content)
+        # LLM 原始输出不能直接信任，后面还要经过字段过滤、显式值覆盖和规则校验。
         return self._normalize_response(raw_plan, source_text, template, visible_parameters)
 
     def _build_system_prompt(
@@ -69,6 +74,8 @@ class BaseTemplateLLMPlanner:
         template: TemplateDefinition,
         visible_parameters: list[str],
     ) -> str:
+        # system prompt 的核心目的不是“让模型自由发挥”，
+        # 而是把它尽量压缩成一个受限参数提案器。
         return (
             f"你是 ParamCAD 的 {template.name} 参数提案器，只能输出 JSON。"
             f"允许的参数名只有：{visible_parameters}。"
@@ -111,6 +118,7 @@ class BaseTemplateLLMPlanner:
             keywords = [str(item).lower() for item in spec.get("keywords", [])]
             if not any(keyword in lowered for keyword in keywords):
                 continue
+            # proposed_ops 的含义是“系统听懂了你的意图，但当前不承诺能执行”。
             proposed.append(
                 LLMProposedOp(
                     op=str(spec["op"]),
@@ -158,11 +166,14 @@ class BaseTemplateLLMPlanner:
         if isinstance(raw_patch, dict):
             for key, value in raw_patch.items():
                 if key not in allowed:
+                    # 模型就算胡乱输出字段，也只能落在允许集合内。
                     continue
                 normalized_value = self._normalize_value(key, value)
                 if normalized_value is not None:
                     patch[key] = normalized_value
 
+        # 显式正则提取值优先级最高。
+        # 原因是用户原文里已经明确给了数字时，不应该再让模型“润色”或改写。
         explicit_parameters = self._extract_explicit_values(source_text, allowed)
         patch.update(explicit_parameters)
         inferred_parameters = {key: value for key, value in patch.items() if key not in explicit_parameters}
@@ -193,6 +204,8 @@ class BaseTemplateLLMPlanner:
         if template_name not in {None, template.name}:
             warnings.append(f"模型返回了不支持的模板 '{template_name}'，已忽略并改回当前模板。")
 
+        # 这一步非常关键：LLM 输出的 patch 还要再走一遍 validator。
+        # 也就是说，系统真正信任的是“规则层收口后的候选参数”，不是模型原话。
         validation = self.validator.validate(
             template,
             patch,
@@ -202,6 +215,7 @@ class BaseTemplateLLMPlanner:
         missing_visible = [key for key in visible_parameters if key not in patch]
         suggested_defaults = {key: template.defaults[key] for key in missing_visible if key in template.defaults}
         for key, value in suggested_defaults.items():
+            # default 不直接悄悄写进 parameter_patch，而是明确告诉前端“这里会沿用默认值，等你确认”。
             missing_or_uncertain.append(f"{self._param_label(key)}未明确，当前将使用默认值 {value}")
 
         localized_warnings = localize_messages(warnings, template.name)
@@ -212,6 +226,8 @@ class BaseTemplateLLMPlanner:
 
         final_status = status
         if localized_errors or missing_or_uncertain or not patch or inferred_parameters or proposed_ops:
+            # 一旦存在推断、默认值补位、校验问题或超范围提议，
+            # 就强制降级成 needs_confirmation，避免把提案误当成最终命令。
             final_status = "needs_confirmation"
         elif final_status not in {"ready", "needs_confirmation"}:
             final_status = "ready"
@@ -253,6 +269,8 @@ class BaseTemplateLLMPlanner:
 
         if key == "hole_count":
             if isinstance(value, (int, float)) and not isinstance(value, bool):
+                # 像 hole_count 这种离散参数，哪怕模型给了 3.8，
+                # 这里也会收敛成整数，避免把浮点值一路带到执行器。
                 return int(round(value))
             return None
 
@@ -269,6 +287,8 @@ class BaseTemplateLLMPlanner:
             if not match:
                 continue
             raw = match.group(1)
+            # 每个模板 planner 都把“最稳定、最常见”的中文表达先用正则兜住，
+            # 这样模型需要推断的范围就会明显缩小。
             extracted[key] = int(raw) if as_int else float(raw) if "." in raw else int(raw)
         return extracted
 
@@ -417,6 +437,8 @@ class SheetMetalCoverLLMPlanner(BaseTemplateLLMPlanner):
     def _visible_parameters(self, template: TemplateDefinition) -> list[str]:
         capability_report = self.capability_inspector.describe(template)
         hidden = set(capability_report["inactive_parameters"])
+        # 钣金外壳当前故意把未稳定接入的参数从 LLM 可见范围里剔掉，
+        # 避免模型给出看似合理、实际上执行不到的字段。
         return [key for key in capability_report["declared_parameters"] if key not in hidden]
 
     def _extra_prompt_rules(self) -> str:
@@ -462,6 +484,8 @@ class MotorMountLLMPlanner(BaseTemplateLLMPlanner):
     def _visible_parameters(self, template: TemplateDefinition) -> list[str]:
         capability_report = self.capability_inspector.describe(template)
         hidden = set(capability_report["inactive_parameters"])
+        # 电机支架当前同样采用“只暴露稳定参数”的策略，
+        # 因为 hole_count、fillet_radius 等字段虽然在模板里存在，但执行器尚未稳定支持。
         return [key for key in capability_report["declared_parameters"] if key not in hidden]
 
     def _extra_prompt_rules(self) -> str:
@@ -522,6 +546,8 @@ class ParamCADLLMPlanner:
 
     def _route(self, text: str) -> BaseTemplateLLMPlanner | None:
         lowered = text.lower()
+        # route 用的是轻量启发式，不追求“万能识别”。
+        # 因为这里只需要先把文本送到最可能的模板 planner，再在该模板内做受限提案。
         if "法兰" in text or "flange" in lowered:
             return self.planners["flange_connector_plate"]
         if any(keyword in text for keyword in ["钣金", "外壳", "罩壳"]) or "cover" in lowered:
